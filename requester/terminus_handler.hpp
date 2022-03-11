@@ -1,6 +1,9 @@
 #pragma once
 
+#include "libpldm/fru.h"
+
 #include "common/types.hpp"
+#include "pldmd/dbus_impl_fru.hpp"
 #include "pldmd/dbus_impl_requester.hpp"
 #include "requester/handler.hpp"
 
@@ -141,6 +144,21 @@ class TerminusHandler
      */
     requester::Coroutine setDateTime();
 
+    /** @brief Get FRU Record Table from remote MCTP Endpoint
+     *  @param[in] total - Total number of record in table
+     */
+    requester::Coroutine getFRURecordTable(const uint16_t& total);
+
+    /** @brief Get FRU Record Table Metadata from remote MCTP Endpoint
+     */
+    requester::Coroutine getFRURecordTableMetadata(uint16_t* total);
+
+    /** @brief Parse record data from FRU table
+     *  @param[in] fruData - pointer to FRU record table
+     *  @param[in] fruLen - FRU table length
+     */
+    void parseFruRecordTable(const uint8_t* fruData, size_t& fruLen);
+
     /** @brief map that captures various terminus information **/
     TLPDRMap tlPDRInfo;
 
@@ -178,6 +196,9 @@ class TerminusHandler
 
     /** @brief Mapping the terminus ID with the terminus name */
     std::pair<bool, std::string> eidToName;
+
+    /** @brief Map of the object FRU */
+    std::unordered_map<uint8_t, std::shared_ptr<pldm::dbus_api::FruReq>> frus;
 };
 
 } // namespace terminus
