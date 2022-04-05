@@ -83,7 +83,7 @@ class Manager
             }
             dev->udpateEidMapping(eidMap);
             [[maybe_unused]] auto co = dev->discoveryTerminus();
-            dev->updateSensor();
+            dev->startSensorsPolling();
             mDevices[it] = std::move(dev);
         }
         return;
@@ -109,6 +109,16 @@ class Manager
             mDevices.erase(it);
         }
         return;
+    }
+
+    void addEventMsg(uint8_t tid, uint8_t eventId, uint8_t eventType,
+                     uint8_t eventClass)
+    {
+        for (auto it = mDevices.begin(); it != mDevices.end(); ++it)
+        {
+            auto secondPtr = it->second.get();
+            secondPtr->addEventMsg(tid, eventId, eventType, eventClass);
+        }
     }
 
   private:

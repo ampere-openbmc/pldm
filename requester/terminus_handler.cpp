@@ -14,6 +14,7 @@ namespace terminus
 
 using namespace pldm::sensor;
 using EpochTimeUS = uint64_t;
+
 std::string fruPath = "/xyz/openbmc_project/pldm/fru";
 
 TerminusHandler::TerminusHandler(
@@ -1572,9 +1573,9 @@ void TerminusHandler::parseAuxNamePDRs(const PDRList& sensorPDRs)
     return;
 }
 
-/** @brief Start the time to get sensor info
+/** @brief Start timer to get sensor info
  */
-void TerminusHandler::updateSensor()
+void TerminusHandler::startSensorsPolling()
 {
     readCount = 0;
     continuePollSensor = true;
@@ -1596,6 +1597,23 @@ void TerminusHandler::updateSensor()
     }
 
     return;
+}
+
+/** @brief Stop timer to get sensor info
+ */
+void TerminusHandler::stopSensorsPolling()
+{
+    continuePollSensor = false;
+    _timer.setEnabled(false);
+    _timer2.setEnabled(false);
+
+    // Set sensors values to Nan and Functional property to false for FANs speeds to be driven max
+    for (auto sensorIt = _sensorObjects.begin(); sensorIt != _sensorObjects.end(); ++sensorIt)
+    {
+        auto sensorObj = sensorIt->second.get();
+        sensorObj->setFunctionalStatus(false);
+        sensorObj->updateValue(std::numeric_limits<double>::quiet_NaN());
+    }
 }
 
 void TerminusHandler::removeUnavailableSensor(
@@ -1840,7 +1858,7 @@ void TerminusHandler::processSensorReading(mctp_eid_t, const pldm_msg* response,
                     << "rc=" << unsigned(rc) << ",cc=" << unsigned(cc) << " "
                     << unsigned(eid) << ":" << sid << std::endl;
             sensorValue = std::numeric_limits<double>::quiet_NaN();
-            operationalState = PLDM_SENSOR_ENABLED;
+            operationalState = PLDM_SENSOR_DISABLED;
         }
         else
         {
@@ -1979,6 +1997,16 @@ void TerminusHandler::stopTerminusHandler()
 {
     stopTerminusPolling = true;
     continuePollSensor = false;
+}
+
+void TerminusHandler::addEventMsg(uint8_t tid, uint8_t eventId,
+                                  uint8_t eventType, uint8_t eventClass)
+{
+    if (tid != devInfo.tid)
+        return;
+
+    if (eventDataHndl)
+        eventDataHndl->addEventMsg(eventId, eventType, eventClass);
 }
 
 } // namespace terminus

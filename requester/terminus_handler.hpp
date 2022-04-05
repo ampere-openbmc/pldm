@@ -13,6 +13,7 @@
 #include <sdeventplus/source/event.hpp>
 #include <sdeventplus/utility/timer.hpp>
 
+#include <unistd.h>
 #include <map>
 
 namespace pldm
@@ -152,14 +153,23 @@ class TerminusHandler
      */
     requester::Coroutine discoveryTerminus();
 
-    /** @brief Start the time to get sensor info
+    /** @brief Start timer to get sensor info
      *
      *  @param - none
      *
      *  @return - none
      *
      */
-    void updateSensor();
+    void startSensorsPolling();
+
+    /** @brief Stop timer to get sensor info and discovery
+     *
+     *  @param - none
+     *
+     *  @return - none
+     *
+     */
+    void stopSensorsPolling();
 
     /** @brief Set terminus handler flag to false to stop polling or discovery
      *
@@ -169,6 +179,31 @@ class TerminusHandler
      *
      */
     void stopTerminusHandler();
+
+    /** @brief Add received event message to terminus handler
+     *
+     *  @param[in] tid - Terminus ID
+     *  @param[in] eventID - Event ID
+     *  @param[in] eventType - type of event
+     *  @param[in] eventClass - Event Class of sensor event
+     *
+     *  @return - none
+     *
+     */
+    void addEventMsg(uint8_t tid, uint8_t eventId, uint8_t eventType,
+                     uint8_t eventClass);
+
+    /** @brief Get TID of this terminus handler
+     *
+     *  @param - none
+     *
+     *  @return - none
+     *
+     */
+    uint8_t getTid()
+    {
+        return devInfo.tid;
+    }
 
   private:
     using mapped_type = std::tuple<uint16_t, ObjectInfo>;
@@ -454,6 +489,7 @@ class TerminusHandler
      *  milliseconds. The default value is 10 milliseconds
      */
     sdeventplus::utility::Timer<sdeventplus::ClockId::Monotonic> _timer2;
+
     /** @brief Polling sensor flag. True when pldmd is polling sensor values */
     bool pollingSensors = false;
     /** @brief Enable the measurement in polling sensors */

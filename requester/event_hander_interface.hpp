@@ -41,14 +41,30 @@ class EventHandlerInterface
     void registerEventHandler(uint8_t event_class, HandlerFunc func);
     int enqueueCriticalEvent(uint16_t item);
     int enqueueOverflowEvent(uint16_t item);
-    void startCallback();
-    void stopCallback();
+    void addEventMsg(uint8_t eventId, uint8_t eventType, uint8_t eventClass);
+    void startEventSignalPolling();
+    void stopEventSignalPolling();
+    bool areBMCRASQueuesEmpty()
+    {
+      if (critEventQueue.empty() && overflowEventQueue.empty())
+      {
+          return true;
+      }
+      return false;
+    }
+
+    bool areMProRASQueuesEmpty()
+    {
+      return mProRASQueuesAreEmpty;
+    }
 
   private:
     std::size_t MAX_QUEUE_SIZE = 256;
     bool isProcessPolling = false;
     bool isPolling = false;
     bool isCritical = false;
+    bool isInQuiesceMode = false;
+    bool mProRASQueuesAreEmpty = false;
     uint8_t eid;
     sdbusplus::bus::bus& bus;
     sdeventplus::Event& event;
@@ -61,10 +77,12 @@ class EventHandlerInterface
 
     void processResponseMsg(mctp_eid_t eid, const pldm_msg* response,
                             size_t respMsgLen);
-    void reset();
+    void resetCacheAndFlags();
     void pollReqTimeoutHdl();
     void pollEventReqCb();
     void clearOverflow();
+    void startCallback();
+    void stopCallback();
 
     struct ReqPollInfo
     {

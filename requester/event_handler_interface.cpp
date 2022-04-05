@@ -152,7 +152,7 @@ void EventHandlerInterface::pollReqTimeoutHdl()
                   << reqData.eventIdToAck << "\n";
 #endif
         // clear cached data
-        reset();
+        resetCacheAndFlags();
     }
 }
 
@@ -162,7 +162,7 @@ void EventHandlerInterface::registerEventHandler(uint8_t eventClass,
     eventHndls.emplace(eventClass, function);
 }
 
-void EventHandlerInterface::reset()
+void EventHandlerInterface::resetCacheAndFlags()
 {
     isProcessPolling = false;
     isPolling = false;
@@ -205,7 +205,7 @@ void EventHandlerInterface::processResponseMsg(mctp_eid_t /*eid*/,
             << "ERROR: Failed to decode_poll_for_platform_event_message_resp, rc = "
             << rc << std::endl;
 #endif
-        reset();
+        resetCacheAndFlags();
         return;
     }
 
@@ -229,13 +229,22 @@ void EventHandlerInterface::processResponseMsg(mctp_eid_t /*eid*/,
 
     if (retEventId == 0x0 || retEventId == 0xffff)
     {
-        reset();
-        if (retEventId == 0x0)
+        resetCacheAndFlags();
+        if (retEventId == 0x0) /* MPro RAS queues are empty */
+        {
             clearOverflow();
+            mProRASQueuesAreEmpty = true;
+        }
+        else /* MPro RAS queues are NOT empty */
+        {
+            // In normal situation, dummy poll remaining CE RAS every 50ms
+            normEventTimer.setRemaining(std::chrono::milliseconds(50));
+        }
         return;
     }
 
     // found
+    mProRASQueuesAreEmpty = false;
     int flag = static_cast<int>(retTransferFlag);
     std::vector<uint8_t> retEventData(retEventDataSize, 0);
     memcpy(retEventData.data(), eventData, retEventDataSize);
@@ -386,6 +395,31 @@ void EventHandlerInterface::stopCallback()
     {
         std::cerr << "ERROR: cannot stop callback" << std::endl;
         throw;
+    }
+}
+
+void EventHandlerInterface::startEventSignalPolling()
+{
+    startCallback();
+}
+
+void EventHandlerInterface::stopEventSignalPolling()
+{
+    stopCallback();
+    resetCacheAndFlags();
+}
+
+void EventHandlerInterface::addEventMsg(uint8_t eventId, uint8_t eventType,
+                                        uint8_t eventClass)
+{
+    if (eventType == PLDM_MESSAGE_POLL_EVENT)
+        enqueueCriticalEvent(eventId);
+    if ((eventType == PLDM_SENSOR_EVENT) &&
+        (eventClass == PLDM_NUMERIC_SENSOR_STATE))
+    {
+        // add the priority
+        std::cerr << "Overflow: " << eventId << "\n";
+        enqueueOverflowEvent(eventId);
     }
 }
 

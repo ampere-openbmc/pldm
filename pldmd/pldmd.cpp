@@ -10,7 +10,6 @@
 #include "requester/mctp_endpoint_discovery.hpp"
 #include "requester/request.hpp"
 #include "requester/terminus_manager.hpp"
-
 #include <err.h>
 #include <getopt.h>
 #include <libpldm/base.h>
@@ -42,6 +41,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "../requester/event_manager.hpp"
 
 PHOSPHOR_LOG2_USING;
 
@@ -282,11 +282,33 @@ int main(int argc, char** argv)
     // FRU table is built lazily when a FRU command or Get PDR command is
     // handled. To enable building FRU table, the FRU handler is passed to the
     // Platform handler.
+    std::unique_ptr<terminus::Manager> devManager =
+        std::make_unique<terminus::Manager>(
+            bus, event, pdrRepo.get(), entityTree.get(), bmcEntityTree.get(),
+            &reqHandler, instanceIdDb);
+    std::unique_ptr<EventManager> eventManager =
+        std::make_unique<EventManager>(devManager.get());
+    pldm::responder::platform::EventMap addOnEventHandlers{
+        {PLDM_MESSAGE_POLL_EVENT,
+         {[&eventManager](const pldm_msg* request, size_t payloadLength,
+                             uint8_t formatVersion, uint8_t tid,
+                             size_t eventDataOffset) {
+             return eventManager->handleMessagePollEvent(
+                 request, payloadLength, formatVersion, tid, eventDataOffset);
+         }}},
+        {PLDM_SENSOR_EVENT,
+         {[&eventManager](const pldm_msg* request, size_t payloadLength,
+                             uint8_t formatVersion, uint8_t tid,
+                             size_t eventDataOffset) {
+             return eventManager->handleSensorEvent(
+                 request, payloadLength, formatVersion, tid, eventDataOffset);
+         }}}};
+
     auto platformHandler = std::make_unique<platform::Handler>(
         &dbusHandler, hostEID, &instanceIdDb, PDR_JSONS_DIR, pdrRepo.get(),
         hostPDRHandler.get(), dbusToPLDMEventHandler.get(), fruHandler.get(),
         oemPlatformHandler.get(), platformConfigHandler.get(), &reqHandler,
-        event, true);
+        event, true, addOnEventHandlers);
 #ifdef OEM_IBM
     pldm::responder::oem_ibm_platform::Handler* oemIbmPlatformHandler =
         dynamic_cast<pldm::responder::oem_ibm_platform::Handler*>(
@@ -310,17 +332,10 @@ int main(int argc, char** argv)
 
 #endif
 
-    std::unique_ptr<terminus::Manager> devManager =
-        std::make_unique<terminus::Manager>(
-            bus, event, pdrRepo.get(), entityTree.get(), bmcEntityTree.get(),
-            &reqHandler, instanceIdDb);
     std::unique_ptr<fw_update::Manager> fwManager =
         std::make_unique<fw_update::Manager>(event, reqHandler, instanceIdDb);
     std::unique_ptr<MctpDiscovery> mctpDiscoveryHandler =
         std::make_unique<MctpDiscovery>(bus, fwManager.get(), devManager.get());
-
-    std::unique_ptr<PldmDbusEventSignal> eventSignal =
-        std::make_unique<PldmDbusEventSignal>(devManager.get());
 
     auto callback = [verbose, &invoker, &reqHandler, &fwManager, &pldmTransport,
                      TID](IO& io, int fd, uint32_t revents) mutable {
