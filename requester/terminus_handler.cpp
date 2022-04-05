@@ -183,6 +183,10 @@ requester::Coroutine TerminusHandler::discoveryTerminus()
         }
     }
 
+    /* Start RAS */
+    eventDataHndl = std::make_shared<PldmMessagePollEvent>(eid, event, bus,
+                                                           requester, handler);
+
     co_return PLDM_SUCCESS;
 }
 

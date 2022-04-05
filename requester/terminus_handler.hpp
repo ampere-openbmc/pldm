@@ -6,6 +6,7 @@
 #include "pldmd/dbus_impl_fru.hpp"
 #include "pldmd/dbus_impl_requester.hpp"
 #include "requester/handler.hpp"
+#include "requester/pldm_message_poll_event.hpp"
 #include "sensors/pldm_sensor.hpp"
 
 #include <sdeventplus/event.hpp>
@@ -423,6 +424,7 @@ class TerminusHandler
     bool pollingSensors = false;
     /** @brief Enable the measurement in polling sensors */
     bool debugPollSensor = true;
+    std::shared_ptr<PldmMessagePollEvent> eventDataHndl;
 };
 
 } // namespace terminus

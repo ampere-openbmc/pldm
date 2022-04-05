@@ -201,3 +201,33 @@ option(
     description: '''The interval to restart the timer to poll the PLDm sensors
                     in milliseconds'''
     )
+
+option(
+    'normal-ras-event-timer',
+    type: 'integer',
+    min: 2000,
+    max: 10000,
+    value: 5000,
+    description: '''The amount of time a BMC periodcally poll normal RAS event
+                    in milliseconds'''
+    )
+
+option(
+    'critical-ras-event-timer',
+    type: 'integer',
+    min: 25,
+    max: 100,
+    value: 50,
+    description: '''The amount of time a BMC periodcally poll critical RAS event
+                    in milliseconds'''
+    )
+
+option(
+    'poll-req-event-timer',
+    type: 'integer',
+    min: 25,
+    max: 100,
+    value: 25,
+    description: '''The amount of time a BMC send each part in multipart
+                    pollForEventMessage in milliseconds'''
+    )
