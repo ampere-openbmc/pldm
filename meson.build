@@ -183,6 +183,8 @@ executable(
   'fw-update/watch.cpp',
   'fw-update/update_manager.cpp',
   'requester/mctp_endpoint_discovery.cpp',
+  'sensors/pldm_sensor.cpp',
+  'sensors/hwmon.cpp',
   implicit_include_directories: false,
   dependencies: deps,
   install: true,
