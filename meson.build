@@ -182,6 +182,7 @@ executable(
   'fw-update/device_updater.cpp',
   'fw-update/watch.cpp',
   'fw-update/update_manager.cpp',
+  'requester/terminus_handler.cpp',
   'requester/mctp_endpoint_discovery.cpp',
   'sensors/pldm_sensor.cpp',
   'sensors/hwmon.cpp',

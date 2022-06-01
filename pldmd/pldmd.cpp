@@ -9,6 +9,7 @@
 #include "requester/handler.hpp"
 #include "requester/mctp_endpoint_discovery.hpp"
 #include "requester/request.hpp"
+#include "requester/terminus_manager.hpp"
 
 #include <err.h>
 #include <getopt.h>
@@ -186,7 +187,7 @@ int main(int argc, char** argv)
     auto event = Event::get_default();
     auto& bus = pldm::utils::DBusHandler::getBus();
     sdbusplus::server::manager_t objManager(bus,
-                                            "/xyz/openbmc_project/software");
+                                            "/xyz/openbmc_project/sensors");
 
     InstanceIdDb instanceIdDb;
     dbus_api::Requester dbusImplReq(bus, "/xyz/openbmc_project/pldm",
@@ -210,9 +211,6 @@ int main(int argc, char** argv)
             std::make_unique<pldm::host_effecters::HostEffecterParser>(
                 &instanceIdDb, pldmTransport.getEventSource(), pdrRepo.get(),
                 &dbusHandler, HOST_JSONS_DIR, &reqHandler);
-#ifdef LIBPLDMRESPONDER
-    using namespace pldm::state_sensor;
-    dbus_api::Host dbusImplHost(bus, "/xyz/openbmc_project/pldm");
     std::unique_ptr<pldm_entity_association_tree,
                     decltype(&pldm_entity_association_tree_destroy)>
         entityTree(pldm_entity_association_tree_init(),
@@ -231,6 +229,10 @@ int main(int argc, char** argv)
         throw std::runtime_error(
             "Failed to instantiate BMC PDR entity association tree");
     }
+
+#ifdef LIBPLDMRESPONDER
+    using namespace pldm::state_sensor;
+    dbus_api::Host dbusImplHost(bus, "/xyz/openbmc_project/pldm");
     std::shared_ptr<HostPDRHandler> hostPDRHandler;
     std::unique_ptr<DbusToPLDMEvent> dbusToPLDMEventHandler;
     std::unique_ptr<oem_platform::Handler> oemPlatformHandler{};
@@ -308,10 +310,18 @@ int main(int argc, char** argv)
 
 #endif
 
+    std::unique_ptr<terminus::Manager> devManager =
+        std::make_unique<terminus::Manager>(
+            bus, event, pdrRepo.get(), entityTree.get(), bmcEntityTree.get(),
+            &reqHandler, instanceIdDb);
     std::unique_ptr<fw_update::Manager> fwManager =
         std::make_unique<fw_update::Manager>(event, reqHandler, instanceIdDb);
     std::unique_ptr<MctpDiscovery> mctpDiscoveryHandler =
-        std::make_unique<MctpDiscovery>(bus, fwManager.get());
+        std::make_unique<MctpDiscovery>(bus, fwManager.get(), devManager.get());
+
+    std::unique_ptr<PldmDbusEventSignal> eventSignal =
+        std::make_unique<PldmDbusEventSignal>(devManager.get());
+
     auto callback = [verbose, &invoker, &reqHandler, &fwManager, &pldmTransport,
                      TID](IO& io, int fd, uint32_t revents) mutable {
         if (!(revents & EPOLLIN))
