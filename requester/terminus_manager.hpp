@@ -6,8 +6,11 @@
 #include "requester/request.hpp"
 #include "requester/terminus_handler.hpp"
 
+#include <nlohmann/json.hpp>
 #include <sdeventplus/event.hpp>
 
+#include <filesystem>
+#include <iostream>
 #include <map>
 #include <vector>
 
@@ -19,6 +22,8 @@ namespace terminus
 
 using namespace pldm::dbus_api;
 using namespace pldm::terminus;
+namespace fs = std::filesystem;
+using Json = nlohmann::json;
 
 /** @class Manager
  *
@@ -49,7 +54,12 @@ class Manager
         event(event), repo(repo), entityTree(entityTree),
         bmcEntityTree(bmcEntityTree), handler(handler),
         instanceIdDb(instanceIdDb)
-    {}
+    {
+        if (!setupEIDtoTeminusName(EID_TO_NAME_JSON))
+        {
+            std::cerr << "Failed to set up EID To TerminusName." << std::endl;
+        }
+    }
 
     /** @brief Add the discovered MCTP endpoints to the managed devices list
      *
@@ -66,6 +76,13 @@ class Manager
             auto dev = std::make_unique<TerminusHandler>(
                 it, event, bus, repo, entityTree, bmcEntityTree,
                 handler, instanceIdDb);
+
+            std::pair<bool, std::string> eidMap = std::make_pair(true, "");
+            if (eidToNameMaps.count(it))
+            {
+                eidMap = eidToNameMaps[it];
+            }
+            dev->udpateEidMapping(eidMap);
             dev->discoveryTerminus();
             mDevices[it] = std::move(dev);
         }
@@ -117,6 +134,58 @@ class Manager
     InstanceIdDb& instanceIdDb;
 
     std::map<mctp_eid_t, std::unique_ptr<TerminusHandler>> mDevices;
+
+    /*
+     * Mapping from "TIDx" in sensor name to prefix/subfix "ABCD"
+     */
+    std::map<uint8_t, std::pair<bool, std::string>> eidToNameMaps;
+
+    bool setupEIDtoTeminusName(const fs::path& path)
+    {
+        const Json emptyJson{};
+        if (!fs::exists(path))
+        {
+            std::cerr << path << "is not existing." << std::endl;
+        }
+        std::ifstream jsonFile(path);
+        auto datas = Json::parse(jsonFile, nullptr, false);
+        if (datas.is_discarded())
+        {
+            std::cerr << "Parsing eid to String Map config file failed, FILE="
+                      << path;
+            std::abort();
+        }
+
+        auto entries = datas.value("eids", emptyJson);
+        for (const auto& entry : entries)
+        {
+            try
+            {
+                auto eid = entry.value("eid", -1);
+                if (eid == -1)
+                {
+                    std::cerr << "Invalid \"eid\" configuration" << std::endl;
+                    continue;
+                }
+                auto mapString = entry.value("string", "");
+                if (mapString == "")
+                {
+                    std::cerr << "Invalid configuration of \"string\" of eid "
+                              << unsigned(eid) << std::endl;
+                    continue;
+                }
+                auto isPrefix = entry.value("prefix", true);
+                eidToNameMaps[eid] = std::make_pair(isPrefix, mapString);
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Terminus eid to String lookup map format error\n";
+                continue;
+            }
+        }
+
+        return true;
+    }
 };
 
 }; // namespace terminus

@@ -19,11 +19,19 @@ using namespace pldm::dbus_api;
 
 using BitField8 = bitfield8_t;
 
+/** @struct PLDMSupportedCommands
+ *  @brief PLDM supported commands
+ */
 struct PLDMSupportedCommands
 {
     BitField8 cmdTypes[32];
 };
 
+/** @struct PldmDeviceInfo
+ *  @brief PLDM terminus info
+ *  @details Include EID, TID, supported PLDM types, supported PLDM commands of
+ *  each type
+ */
 struct PldmDeviceInfo
 {
     uint8_t eid;
@@ -77,6 +85,19 @@ class TerminusHandler
     bool isTerminusOn()
     {
         return responseReceived;
+    }
+
+    /** @brief Update EID to Name string mapping for the terminus
+     *
+     *  @param[in] eidMap - the pair of mapping
+     *
+     *  @return - true
+     *
+     */
+    bool udpateEidMapping(std::pair<bool, std::string> eidMap)
+    {
+        eidToName = eidMap;
+        return true;
     }
 
     /** @brief Discovery new terminus
@@ -146,7 +167,13 @@ class TerminusHandler
     /** @brief whether response received from Host */
     bool responseReceived;
 
+    /** @brief The basic info of terminus such as EID, TID, supported PLDM types
+     *  supported PLDM commands for each types.
+     */
     PldmDeviceInfo devInfo;
+
+    /** @brief Mapping the terminus ID with the terminus name */
+    std::pair<bool, std::string> eidToName;
 };
 
 } // namespace terminus

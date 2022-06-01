@@ -1,0 +1,15 @@
+{
+    "eids":
+    [
+        {
+            "eid":20,
+            "prefix": true,
+            "string": "S0_"
+        },
+        {
+            "eid":22,
+            "prefix": false,
+            "string": "S1_"
+        }
+    ]
+}
