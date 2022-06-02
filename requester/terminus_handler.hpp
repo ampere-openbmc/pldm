@@ -6,6 +6,7 @@
 #include "pldmd/dbus_impl_fru.hpp"
 #include "pldmd/dbus_impl_requester.hpp"
 #include "requester/handler.hpp"
+#include "sensors/pldm_sensor.hpp"
 
 #include <sdeventplus/event.hpp>
 #include <sdeventplus/source/event.hpp>
@@ -19,9 +20,18 @@ namespace terminus
 {
 
 using namespace pldm::dbus_api;
+using namespace pldm::sensor;
 
 using BitField8 = bitfield8_t;
 using EntityType = uint16_t;
+using Length8bs = uint8_t;
+using BaseUnit = uint8_t;
+using UnitModifier = int8_t;
+using OccurrenceRate = uint8_t;
+using PldmSensorValue = double;
+using Name = std::string;
+
+using PDRList = std::vector<std::vector<uint8_t>>;
 
 /** @struct PLDMSupportedCommands
  *  @brief PLDM supported commands
@@ -42,6 +52,31 @@ struct PldmDeviceInfo
     uint8_t tid;
     BitField8 supportedTypes[8];
     PLDMSupportedCommands supportedCmds[PLDM_MAX_TYPES];
+};
+
+/** @struct PldmSensorInfo
+ *
+ *  Structure representing PLDM Sensor Info
+ */
+struct PldmSensorInfo
+{
+    EntityType entityType;
+    pdr::EntityInstance entityInstance;
+    pdr::ContainerID containerId;
+    Length8bs sensorNameLength; // 0 indicate no name
+    BaseUnit baseUnit;
+    UnitModifier unitModifier;
+    PldmSensorValue offset;
+    PldmSensorValue resolution;
+    OccurrenceRate occurrenceRate;
+    BitField8 rangeFieldSupport;
+    PldmSensorValue warningHigh;
+    PldmSensorValue warningLow;
+    PldmSensorValue criticalHigh;
+    PldmSensorValue criticalLow;
+    PldmSensorValue fatalHigh;
+    PldmSensorValue fatalLow;
+    Name sensorName;
 };
 
 /** @class TerminusHandler
@@ -112,6 +147,20 @@ class TerminusHandler
     requester::Coroutine discoveryTerminus();
 
   private:
+    using mapped_type = std::tuple<uint16_t, ObjectInfo>;
+    /* sensor_key tuple of eid, sensorId, pdr_type */
+    using sensor_key = std::tuple<uint8_t, uint16_t, uint8_t>;
+    using SensorState = std::map<sensor_key, mapped_type>;
+
+    /* aux_name_key is pair of handler and sensorId */
+    using auxNameKey = std::tuple<uint16_t, uint16_t>;
+    /* names list of one state/effecter sensor */
+    using auxNameList = std::vector<std::tuple<std::string, std::string>>;
+    /* sensor name index map to names list*/
+    using auxNameSensorMapping = std::vector<auxNameList>;
+    /* auxNameKey to sensor auxNameList */
+    using auxNameMapping = std::map<auxNameKey, auxNameSensorMapping>;
+
     /** @brief getPLDMTypes for every device in MCTP Control D-Bus interface
      */
     requester::Coroutine getPLDMTypes();
@@ -193,6 +242,14 @@ class TerminusHandler
                                         size_t& respMsgLen,
                                         uint32_t* nextRecordHandle);
 
+    /** @brief Parse comback numeric sensor PDRs and create the sensor D-Bus
+     *  objects
+     *
+     *  @param[in] effecterPDRs - device effecter PDRs
+     *
+     */
+    void createCompactNummericSensorIntf(const PDRList& sensorPDRs);
+
     /** @brief map that captures various terminus information **/
     TLPDRMap tlPDRInfo;
 
@@ -257,6 +314,13 @@ class TerminusHandler
 
     /** @brief Terminus handle */
     uint16_t terminusHandle = 0;
+    /** @brief DBus object state. */
+    SensorState _state;
+
+    /** @brief Store the specifications of sensor objects */
+    std::map<sensor_key, std::unique_ptr<PldmSensor>> _sensorObjects;
+    /** @brief Identify the D-Bus interface for the sensors is created */
+    bool createdDbusObject = false;
 };
 
 } // namespace terminus

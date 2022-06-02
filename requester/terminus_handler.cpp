@@ -12,6 +12,7 @@ namespace pldm
 namespace terminus
 {
 
+using namespace pldm::sensor;
 using EpochTimeUS = uint64_t;
 std::string fruPath = "/xyz/openbmc_project/pldm/fru";
 
@@ -24,7 +25,7 @@ TerminusHandler::TerminusHandler(
     eid(eid),
     bus(bus), event(event), repo(repo), entityTree(entityTree),
     bmcEntityTree(bmcEntityTree), handler(handler),
-    instanceIdDb(instanceIdDb)
+    instanceIdDb(instanceIdDb), _state()
 {}
 
 TerminusHandler::~TerminusHandler()
@@ -33,6 +34,8 @@ TerminusHandler::~TerminusHandler()
     this->compNumSensorPDRs.clear();
     this->effecterAuxNamePDRs.clear();
     this->effecterPDRs.clear();
+    this->_state.clear();
+    this->_sensorObjects.clear();
 }
 
 requester::Coroutine TerminusHandler::discoveryTerminus()
@@ -157,6 +160,14 @@ requester::Coroutine TerminusHandler::discoveryTerminus()
                 std::cerr << eidToName.second << " Finish get all PDR "
                           << elapsed_seconds.count() << "s at "
                           << getCurrentSystemTime() << std::endl;
+            }
+            if (this->compNumSensorPDRs.size() > 0)
+            {
+                this->createCompactNummericSensorIntf(this->compNumSensorPDRs);
+            }
+            if (_state.size() > 0)
+            {
+                createdDbusObject = true;
             }
         }
     }
@@ -1138,6 +1149,138 @@ bool TerminusHandler::getParent(const EntityType& type, pldm_entity* parent)
     }
 
     return false;
+}
+
+void TerminusHandler::createCompactNummericSensorIntf(const PDRList& sensorPDRs)
+{
+    /** @brief Store the added sensor D-Bus object path */
+    std::vector<uint16_t> _addedSensorId;
+    for (const auto& sensorPDR : sensorPDRs)
+    {
+        auto pdr = reinterpret_cast<const pldm_compact_numeric_sensor_pdr*>(
+            sensorPDR.data());
+
+        auto it = std::find(_addedSensorId.begin(), _addedSensorId.end(),
+                            pdr->sensor_id);
+        if (it != _addedSensorId.end())
+        {
+            std::cerr << "Sensor " << pdr->sensor_id << " added." << std::endl;
+            continue;
+        }
+        _addedSensorId.emplace_back(pdr->sensor_id);
+
+        PldmSensorInfo sensorInfo{};
+        auto terminusHandle = pdr->terminus_handle;
+        sensorInfo.entityType = pdr->entity_type;
+        sensorInfo.entityInstance = pdr->entity_instance;
+        sensorInfo.containerId = pdr->container_id;
+        sensorInfo.sensorNameLength = pdr->sensor_name_length;
+        if (sensorInfo.sensorNameLength == 0)
+        {
+            sensorInfo.sensorName =
+                "SensorId" + std::to_string(unsigned(pdr->sensor_id));
+        }
+        else
+        {
+            std::string sTemp(reinterpret_cast<char const*>(pdr->sensor_name),
+                              sensorInfo.sensorNameLength);
+            size_t pos = 0;
+            while ((pos = sTemp.find(" ")) != std::string::npos)
+            {
+                sTemp.replace(pos, 1, "_");
+            }
+            sensorInfo.sensorName = sTemp;
+        }
+
+        sensorInfo.baseUnit = pdr->base_unit;
+        sensorInfo.unitModifier = pdr->unit_modifier;
+        sensorInfo.offset = 0;
+        sensorInfo.resolution = 1;
+        sensorInfo.occurrenceRate = pdr->occurrence_rate;
+        sensorInfo.rangeFieldSupport = pdr->range_field_support;
+        sensorInfo.warningHigh = std::numeric_limits<double>::quiet_NaN();
+        sensorInfo.warningLow = std::numeric_limits<double>::quiet_NaN();
+        sensorInfo.criticalHigh = std::numeric_limits<double>::quiet_NaN();
+        sensorInfo.criticalLow = std::numeric_limits<double>::quiet_NaN();
+        sensorInfo.fatalHigh = std::numeric_limits<double>::quiet_NaN();
+        sensorInfo.fatalLow = std::numeric_limits<double>::quiet_NaN();
+        if (pdr->range_field_support.bits.bit0)
+        {
+            sensorInfo.warningHigh = double(pdr->warning_high);
+        }
+        if (pdr->range_field_support.bits.bit1)
+        {
+            sensorInfo.warningLow = double(pdr->warning_low);
+        }
+        if (pdr->range_field_support.bits.bit2)
+        {
+            sensorInfo.criticalHigh = double(pdr->critical_high);
+        }
+        if (pdr->range_field_support.bits.bit3)
+        {
+            sensorInfo.criticalLow = double(pdr->critical_low);
+        }
+        if (pdr->range_field_support.bits.bit4)
+        {
+            sensorInfo.fatalHigh = double(pdr->fatal_high);
+        }
+        if (pdr->range_field_support.bits.bit5)
+        {
+            sensorInfo.fatalLow = double(pdr->fatal_low);
+        }
+
+        auto terminusId = PLDM_TID_RESERVED;
+        try
+        {
+            terminusId = std::get<0>(tlPDRInfo.at(terminusHandle));
+        }
+        catch (const std::out_of_range& e)
+        {
+            // Do nothing
+        }
+
+        /* There is TID mapping */
+        if (eidToName.second != "")
+        {
+            /* PREFIX */
+            if (eidToName.first == true)
+            {
+                sensorInfo.sensorName =
+                    eidToName.second + sensorInfo.sensorName;
+            }
+            else
+            {
+                sensorInfo.sensorName =
+                    sensorInfo.sensorName + eidToName.second;
+            }
+        }
+        else
+        {
+            sensorInfo.sensorName = sensorInfo.sensorName + "_TID" +
+                                    std::to_string(unsigned(terminusId));
+        }
+        std::cerr << "Adding sensor name: " << sensorInfo.sensorName
+                  << std::endl;
+
+        auto sensorObject = std::make_unique<PldmSensor>(
+            bus, sensorInfo.sensorName, sensorInfo.baseUnit,
+            sensorInfo.unitModifier, sensorInfo.offset, sensorInfo.resolution,
+            sensorInfo.warningHigh, sensorInfo.warningLow,
+            sensorInfo.criticalHigh, sensorInfo.criticalLow);
+
+        auto object = sensorObject->createSensor();
+        if (object)
+        {
+            auto value =
+                std::make_tuple(pdr->sensor_id, std::move((*object).second));
+            auto key = std::make_tuple(eid, pdr->sensor_id, pdr->hdr.type);
+
+            _sensorObjects[key] = std::move(sensorObject);
+            _state[std::move(key)] = std::move(value);
+        }
+    }
+
+    return;
 }
 
 } // namespace terminus
