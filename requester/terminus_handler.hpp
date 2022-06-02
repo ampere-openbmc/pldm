@@ -137,6 +137,10 @@ class TerminusHandler
      */
     requester::Coroutine setEventReceiver();
 
+    /** @brief SetDateTime if device support SetDateTime
+     */
+    requester::Coroutine setDateTime();
+
     /** @brief map that captures various terminus information **/
     TLPDRMap tlPDRInfo;
 

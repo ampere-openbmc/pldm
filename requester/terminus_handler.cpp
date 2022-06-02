@@ -2,11 +2,17 @@
 
 #include "terminus_handler.hpp"
 
+#include <sdeventplus/source/time.hpp>
+
+#include <chrono>
+
 namespace pldm
 {
 
 namespace terminus
 {
+
+using EpochTimeUS = uint64_t;
 
 TerminusHandler::TerminusHandler(
     uint8_t eid, sdeventplus::Event& event, sdbusplus::bus::bus& bus,
@@ -72,6 +78,16 @@ requester::Coroutine TerminusHandler::discoveryTerminus()
         if (rc)
         {
             std::cerr << "Failed to getTID, rc=" << unsigned(rc) << std::endl;
+        }
+    }
+
+    if (supportPLDMType(PLDM_BIOS))
+    {
+        rc = co_await setDateTime();
+        if (rc)
+        {
+            std::cerr << "Failed to setDateTime, rc=" << unsigned(rc)
+                      << std::endl;
         }
     }
 
@@ -412,6 +428,119 @@ requester::Coroutine TerminusHandler::setEventReceiver()
                   << std::endl;
         co_return rc;
     }
+
+    co_return cc;
+}
+
+void epochToBCDTime(const uint64_t& timeSec, uint8_t* seconds, uint8_t* minutes,
+                    uint8_t* hours, uint8_t* day, uint8_t* month,
+                    uint16_t* year)
+{
+    auto t = time_t(timeSec);
+    auto time = localtime(&t);
+
+    *seconds = (uint8_t)pldm::utils::decimalToBcd(time->tm_sec);
+    *minutes = (uint8_t)pldm::utils::decimalToBcd(time->tm_min);
+    *hours = (uint8_t)pldm::utils::decimalToBcd(time->tm_hour);
+    *day = (uint8_t)pldm::utils::decimalToBcd(time->tm_mday);
+    *month = (uint8_t)pldm::utils::decimalToBcd(
+        time->tm_mon + 1); // The number of months in the range
+                           // 0 to 11.PLDM expects range 1 to 12
+    *year = (uint16_t)pldm::utils::decimalToBcd(
+        time->tm_year + 1900); // The number of years since 1900
+}
+
+requester::Coroutine TerminusHandler::setDateTime()
+{
+    std::cerr << "Discovery Terminus: " << unsigned(eid)
+              << " update date time to terminus." << std::endl;
+    uint8_t seconds = 0;
+    uint8_t minutes = 0;
+    uint8_t hours = 0;
+    uint8_t day = 0;
+    uint8_t month = 0;
+    uint16_t year = 0;
+
+    constexpr auto timeInterface = "xyz.openbmc_project.Time.EpochTime";
+    constexpr auto bmcTimePath = "/xyz/openbmc_project/time/bmc";
+    EpochTimeUS timeUsec;
+
+    try
+    {
+        timeUsec = pldm::utils::DBusHandler().getDbusProperty<EpochTimeUS>(
+            bmcTimePath, "Elapsed", timeInterface);
+    }
+    catch (const sdbusplus::exception::exception& e)
+    {
+        std::cerr << "Error getting time, PATH=" << bmcTimePath
+                  << " TIME INTERACE=" << timeInterface << std::endl;
+        co_return PLDM_ERROR;
+    }
+
+    uint64_t timeSec = std::chrono::duration_cast<std::chrono::seconds>(
+                           std::chrono::microseconds(timeUsec))
+                           .count();
+
+    epochToBCDTime(timeSec, &seconds, &minutes, &hours, &day, &month, &year);
+    std::cerr << "SetDateTime timeUsec=" << timeUsec << " seconds="
+              << unsigned(seconds) << " minutes=" << unsigned(minutes)
+              << " hours=" << unsigned(hours) << " year=" << year << std::endl;
+
+    std::vector<uint8_t> requestMsg(sizeof(pldm_msg_hdr) +
+                                    sizeof(struct pldm_set_date_time_req));
+    auto request = reinterpret_cast<pldm_msg*>(requestMsg.data());
+    auto instanceId = requester.getInstanceId(eid);
+
+    auto rc = encode_set_date_time_req(instanceId, seconds, minutes, hours, day,
+                                       month, year, request,
+                                       sizeof(struct pldm_set_date_time_req));
+    if (rc != PLDM_SUCCESS)
+    {
+        requester.markFree(eid, instanceId);
+        std::cerr << "Failed to encode_set_date_time_req, rc = " << unsigned(rc)
+                  << std::endl;
+        co_return PLDM_ERROR;
+    }
+
+    Response responseMsg{};
+    rc = co_await requester::sendRecvPldmMsg(*handler, eid, requestMsg,
+                                             responseMsg);
+    if (rc)
+    {
+        std::cerr << "Failed to send sendRecvPldmMsg, EID=" << unsigned(eid)
+                  << ", instanceId=" << unsigned(instanceId)
+                  << ", type=" << unsigned(PLDM_BIOS)
+                  << ", cmd= " << unsigned(PLDM_SET_DATE_TIME)
+                  << ", rc=" << unsigned(rc) << std::endl;
+        ;
+        co_return rc;
+    }
+
+    uint8_t cc = 0;
+    auto respMsgLen = responseMsg.size() - sizeof(struct pldm_msg_hdr);
+    auto response = reinterpret_cast<pldm_msg*>(responseMsg.data());
+    if (response == nullptr || !respMsgLen)
+    {
+        std::cerr << "No response received for sendRecvPldmMsg, EID="
+                  << unsigned(eid) << ", instanceId=" << unsigned(instanceId)
+                  << ", type=" << unsigned(PLDM_BIOS)
+                  << ", cmd= " << unsigned(PLDM_SET_DATE_TIME)
+                  << ", rc=" << unsigned(rc) << std::endl;
+        ;
+        co_return rc;
+    }
+
+    rc = decode_set_date_time_resp(response, respMsgLen, &cc);
+
+    if (rc != PLDM_SUCCESS || cc != PLDM_SUCCESS)
+    {
+        std::cerr << "Response Message Error: "
+                  << "rc=" << unsigned(rc) << ",cc=" << unsigned(cc)
+                  << std::endl;
+        co_return rc;
+    }
+
+    std::cerr << "Success SetDateTime to terminus " << devInfo.tid << std::endl;
 
     co_return cc;
 }
