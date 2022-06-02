@@ -17,6 +17,21 @@ namespace terminus
 
 using namespace pldm::dbus_api;
 
+using BitField8 = bitfield8_t;
+
+struct PLDMSupportedCommands
+{
+    BitField8 cmdTypes[32];
+};
+
+struct PldmDeviceInfo
+{
+    uint8_t eid;
+    uint8_t tid;
+    BitField8 supportedTypes[8];
+    PLDMSupportedCommands supportedCmds[PLDM_MAX_TYPES];
+};
+
 /** @class TerminusHandler
  *  @brief This class can fetch and process PDRs from host firmware
  *  @details Provides an API to fetch PDRs from the host firmware. Upon
@@ -68,9 +83,39 @@ class TerminusHandler
      *
      * @return - none
      */
-    void discoveryTerminus();
+    requester::Coroutine discoveryTerminus();
 
   private:
+    /** @brief getPLDMTypes for every device in MCTP Control D-Bus interface
+     */
+    requester::Coroutine getPLDMTypes();
+
+    /** @brief Get TID of remote MCTP Endpoint
+     */
+    requester::Coroutine getTID();
+
+    /** @brief Get supported PLDM commands of the terminus for every supported
+     *  PLDM type
+     */
+    requester::Coroutine getPLDMCommands();
+    requester::Coroutine getPLDMCommand(const uint8_t& pldmTypeIdx);
+
+    /** @brief whether terminus support PLDM command type
+     */
+    bool supportPLDMType(const uint8_t pldmType);
+
+    /** @brief whether terminus support PLDM command of a PLDM type
+     */
+    bool supportPLDMCommand(const uint8_t type, const uint8_t command);
+
+    /** @brief Get current system time in milliseconds
+     */
+    std::string getCurrentSystemTime();
+
+    /** @brief SetDateTime if device support SetDateTime
+     */
+    requester::Coroutine setEventReceiver();
+
     /** @brief map that captures various terminus information **/
     TLPDRMap tlPDRInfo;
 
@@ -100,6 +145,8 @@ class TerminusHandler
 
     /** @brief whether response received from Host */
     bool responseReceived;
+
+    PldmDeviceInfo devInfo;
 };
 
 } // namespace terminus
