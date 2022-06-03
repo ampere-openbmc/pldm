@@ -10,6 +10,7 @@
 
 #include <sdeventplus/event.hpp>
 #include <sdeventplus/source/event.hpp>
+#include <sdeventplus/utility/timer.hpp>
 
 #include <map>
 
@@ -146,6 +147,15 @@ class TerminusHandler
      */
     requester::Coroutine discoveryTerminus();
 
+    /** @brief Start the time to get sensor info
+     *
+     *  @param - none
+     *
+     *  @return - none
+     *
+     */
+    void updateSensor();
+
   private:
     using mapped_type = std::tuple<uint16_t, ObjectInfo>;
     /* sensor_key tuple of eid, sensorId, pdr_type */
@@ -266,6 +276,45 @@ class TerminusHandler
      */
     void parseAuxNamePDRs(const PDRList& auxNamePDRs);
 
+    /** @brief Start reading the sensors info process
+     *
+     *  @param - none
+     *
+     *  @return - none
+     *
+     */
+    void pollSensors();
+
+    /** @brief Start reading the sensors info process
+     *
+     *  @param - none
+     *
+     *  @return - none
+     *
+     */
+    void readSensor();
+
+    /** @brief Send the getSensorReading request to get sensor info
+     *
+     *  @param[in] sensor_id - Sensor ID
+     *  @param[in] pdr_type - PDR type
+     *
+     *  @return - none
+     *
+     */
+    requester::Coroutine getSensorReading(const uint16_t& sensor_id,
+                                          const uint8_t& pdr_type);
+
+    /** @brief Remove the sensor which response OperationState as not enabled
+     *  in GetSensorReading command
+     *
+     *  @param[in] vKeys - List of sensor keys
+     *
+     *  @return - none
+     *
+     */
+    void removeUnavailableSensor(const std::vector<sensor_key>& vKeys);
+
     /** @brief map that captures various terminus information **/
     TLPDRMap tlPDRInfo;
 
@@ -341,6 +390,27 @@ class TerminusHandler
     std::vector<sensor_key> _effecterLists;
     /** @brief Identify the D-Bus interface for the sensors is created */
     bool createdDbusObject = false;
+    /* The point to the reading sensors */
+    std::map<sensor_key, mapped_type>::iterator sensorIdx;
+    std::vector<sensor_key> unavailableSensorKeys;
+    /** @brief Poll sensor timer. Reset after each poll-sensor-timer-interval
+     *  milliseconds. poll-sensor-timer-interval is package configuration.
+     */
+    sdeventplus::utility::Timer<sdeventplus::ClockId::Monotonic> _timer;
+
+    /** @brief Sleep timer between PLDM GetSensorReading commands.
+     *  @details Because the performance and the responding time for
+     *  GetSensorReading of terminus can be different. The sleep interval
+     *  between GetSensorReading commands will be added. This value can be
+     *  configured thru sleep-between-get-sensor-reading option. The option is
+     *  milliseconds. The default value is 10 milliseconds
+     */
+    sdeventplus::utility::Timer<sdeventplus::ClockId::Monotonic> _timer2;
+    /** @brief Polling sensor flag. True when pldmd is polling sensor values */
+    bool pollingSensors = false;
+    /** @brief Enable the measurement in polling sensors */
+    bool debugPollSensor = true;
+
 };
 
 } // namespace terminus

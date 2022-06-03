@@ -25,7 +25,9 @@ TerminusHandler::TerminusHandler(
     eid(eid),
     bus(bus), event(event), repo(repo), entityTree(entityTree),
     bmcEntityTree(bmcEntityTree), handler(handler),
-    instanceIdDb(instanceIdDb), _state()
+    instanceIdDb(instanceIdDb), _state(),
+    _timer(event, std::bind(&TerminusHandler::pollSensors, this)),
+    _timer2(event, std::bind(&TerminusHandler::readSensor, this))
 {}
 
 TerminusHandler::~TerminusHandler()
@@ -1483,6 +1485,289 @@ void TerminusHandler::parseAuxNamePDRs(const PDRList& sensorPDRs)
         _auxNameMaps[key] = sensorNameMapping;
     }
     return;
+}
+
+/** @brief Start the time to get sensor info
+ */
+void TerminusHandler::updateSensor()
+{
+    readCount = 0;
+    std::function<void()> callback(
+        std::bind(&TerminusHandler::pollSensors, this));
+    try
+    {
+        _timer.restart(std::chrono::milliseconds(POLL_SENSOR_TIMER_INTERVAL));
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error in sysfs polling loop" << std::endl;
+        throw;
+    }
+    return;
+}
+
+void TerminusHandler::removeUnavailableSensor(
+    const std::vector<sensor_key>& vKeys)
+{
+    for (const auto& key : vKeys)
+    {
+        if (_state.find(key) != _state.end())
+        {
+            _state.erase(key);
+        }
+        if (_sensorObjects.find(key) != _sensorObjects.end())
+        {
+            std::unique_ptr<PldmSensor>& sensorObj = _sensorObjects[key];
+            bus.emit_object_removed(sensorObj->getSensorPath().c_str());
+            _sensorObjects.erase(key);
+        }
+    }
+    return;
+}
+
+/** @brief Start reading the sensors info process
+ */
+void TerminusHandler::pollSensors()
+{
+    if (!isTerminusOn())
+    {
+        return;
+    }
+
+    if (!createdDbusObject)
+    {
+        return;
+    }
+
+    if (pollingSensors)
+    {
+        std::cerr << "[" << readCount << "]"
+                  << " Last sensor polling is not DONE. Retry new round later."
+                  << std::endl;
+        return;
+    }
+
+    if (unavailableSensorKeys.size())
+    {
+        removeUnavailableSensor(std::move(unavailableSensorKeys));
+        unavailableSensorKeys.clear();
+    }
+
+    this->sensorIdx = _state.begin();
+    pollingSensors = true;
+    readCount++;
+
+    readSensor();
+
+    return;
+}
+
+/** @brief Start reading the sensors info process
+ */
+void TerminusHandler::readSensor()
+{
+    if (!createdDbusObject)
+    {
+        return;
+    }
+
+    if (this->sensorIdx == _state.begin() && debugPollSensor)
+    {
+        startTime = std::chrono::system_clock::now();
+        std::cerr << eidToName.second << ":[" << readCount << "]"
+                  << "Start new pollSensor at " << getCurrentSystemTime()
+                  << std::endl;
+        /* Stop print polling debug after 50 rounds */
+        if (readCount > 5000)
+        {
+            debugPollSensor = false;
+        }
+    }
+    /* stop sleep timer */
+    _timer2.setEnabled(false);
+    getSensorReading(get<1>(this->sensorIdx->first),
+                     get<2>(this->sensorIdx->first));
+
+    return;
+}
+
+bool verifySensorFunctionalStatus(const uint8_t& pdrType,
+                                  const uint8_t& operationState)
+{
+    if (pdrType == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
+    {
+        /* enabled */
+        if (operationState != 0)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** @brief Send the getSensorReading request to get sensor info
+ */
+requester::Coroutine
+    TerminusHandler::getSensorReading(const uint16_t& sensor_id,
+                                      const uint8_t& pdr_type)
+{
+    uint8_t req_byte = PLDM_GET_SENSOR_READING_REQ_BYTES;
+    if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
+    {
+        req_byte = PLDM_GET_SENSOR_READING_REQ_BYTES;
+    }
+    std::vector<uint8_t> requestMsg(sizeof(pldm_msg_hdr) + req_byte);
+    auto request = reinterpret_cast<pldm_msg*>(requestMsg.data());
+    uint8_t rearmEventState = 1;
+    auto instanceId = requester.getInstanceId(eid);
+
+    int rc = PLDM_ERROR;
+    if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
+    {
+        rc = encode_get_sensor_reading_req(instanceId, sensor_id,
+                                           rearmEventState, request);
+    }
+
+    if (rc != PLDM_SUCCESS)
+    {
+        requester.markFree(eid, instanceId);
+        std::cerr << "Failed to reading sensor/effecter, rc = " << rc
+                  << std::endl;
+        co_return rc;
+    }
+
+    uint8_t cmd = PLDM_GET_SENSOR_READING;
+    if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
+    {
+        cmd = PLDM_GET_SENSOR_READING;
+    }
+
+    Response responseMsg{};
+    rc = co_await requester::sendRecvPldmMsg(*handler, eid, requestMsg,
+                                             responseMsg);
+    if (rc)
+    {
+        std::cerr << "Failed to send sendRecvPldmMsg, EID=" << unsigned(eid)
+                  << ", instanceId=" << unsigned(instanceId)
+                  << ", type=" << unsigned(PLDM_PLATFORM)
+                  << ", cmd= " << unsigned(cmd) << ", rc=" << unsigned(rc)
+                  << std::endl;
+        ;
+        co_return rc;
+    }
+
+    auto respMsgLen = responseMsg.size() - sizeof(struct pldm_msg_hdr);
+    auto response = reinterpret_cast<pldm_msg*>(responseMsg.data());
+    if (response == nullptr || !respMsgLen)
+    {
+        std::cerr << "No response received for sendRecvPldmMsg, EID="
+                  << unsigned(eid) << ", instanceId=" << unsigned(instanceId)
+                  << ", type=" << unsigned(PLDM_PLATFORM)
+                  << ", cmd= " << unsigned(cmd) << ", rc=" << unsigned(rc)
+                  << std::endl;
+        ;
+        co_return rc;
+    }
+
+    uint8_t presentReading[4];
+    uint8_t cc = 0;
+    uint8_t dataSize = PLDM_SENSOR_DATA_SIZE_SINT32;
+    uint8_t operationalState;
+    uint8_t eventMessEn;
+    uint8_t presentState;
+    uint8_t previousState;
+    uint8_t eventState;
+
+    if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
+    {
+        rc = decode_get_sensor_reading_resp(
+            response, respMsgLen, &cc, &dataSize, &operationalState,
+            &eventMessEn, &presentState, &previousState, &eventState,
+            presentReading);
+    }
+
+    if (rc != PLDM_SUCCESS || cc != PLDM_SUCCESS)
+    {
+        auto sid = std::get<1>(this->sensorIdx->first);
+        std::cerr << "Failed to decode get sensor value: "
+                  << "rc=" << unsigned(rc) << ",cc=" << unsigned(cc) << " "
+                  << unsigned(eid) << ":" << sid << std::endl;
+    }
+    else
+    {
+        SensorValueType sensorValue = std::numeric_limits<double>::quiet_NaN();
+        if (dataSize == PLDM_SENSOR_DATA_SIZE_UINT8 ||
+            dataSize == PLDM_SENSOR_DATA_SIZE_SINT8)
+        {
+            uint8_t* val = (uint8_t*)(presentReading);
+            sensorValue = (double)(*val);
+        }
+        else if (dataSize == PLDM_SENSOR_DATA_SIZE_UINT16 ||
+                 dataSize == PLDM_SENSOR_DATA_SIZE_SINT16)
+        {
+            uint16_t* val = (uint16_t*)(presentReading);
+            sensorValue = (double)le16toh(*val);
+        }
+        else if (dataSize == PLDM_SENSOR_DATA_SIZE_UINT32 ||
+                 dataSize == PLDM_SENSOR_DATA_SIZE_SINT32)
+        {
+            uint32_t* val = (uint32_t*)(presentReading);
+            sensorValue = (double)le32toh(*val);
+        }
+
+        std::unique_ptr<PldmSensor>& sensorObj =
+            _sensorObjects[this->sensorIdx->first];
+        bool functional = verifySensorFunctionalStatus(
+            std::get<2>(this->sensorIdx->first), operationalState);
+        /* the CompactNumericSensor is unavailable */
+        if (!functional)
+        {
+            unavailableSensorKeys.push_back(this->sensorIdx->first);
+        }
+
+        if (sensorObj)
+        {
+            /* unavailable */
+            if (!functional)
+            {
+                sensorValue = std::numeric_limits<double>::quiet_NaN();
+            }
+            sensorObj->setFunctionalStatus(functional);
+            sensorObj->updateValue(sensorValue);
+        }
+    }
+
+    pollingSensors = false;
+
+    /* polling next sensor */
+    this->sensorIdx++;
+    if (this->sensorIdx != _state.end())
+    {
+        try
+        {
+            _timer2.restart(
+                std::chrono::milliseconds(SLEEP_BETWEEN_GET_SENSOR_READING));
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Error in sysfs polling loop" << std::endl;
+            throw;
+        }
+        co_return PLDM_SUCCESS;
+    }
+
+    if (debugPollSensor)
+    {
+        std::chrono::duration<double> elapsed_seconds =
+            std::chrono::system_clock::now() - startTime;
+        std::cerr << eidToName.second << ":[" << readCount << "]"
+                  << " Finish one pollsensor round after "
+                  << elapsed_seconds.count() << "s at "
+                  << getCurrentSystemTime() << std::endl;
+        ;
+    }
+
+    co_return PLDM_SUCCESS;
 }
 
 } // namespace terminus

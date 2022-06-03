@@ -84,6 +84,7 @@ class Manager
             }
             dev->udpateEidMapping(eidMap);
             dev->discoveryTerminus();
+            dev->updateSensor();
             mDevices[it] = std::move(dev);
         }
         return;

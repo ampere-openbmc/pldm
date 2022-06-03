@@ -65,6 +65,8 @@ conf_data.set('INSTANCE_ID_EXPIRATION_INTERVAL',get_option('instance-id-expirati
 conf_data.set('RESPONSE_TIME_OUT',get_option('response-time-out'))
 conf_data.set('FLIGHT_RECORDER_MAX_ENTRIES',get_option('flightrecorder-max-entries'))
 conf_data.set_quoted('HOST_EID_PATH', join_paths(package_datadir, 'host_eid'))
+conf_data.set('SLEEP_BETWEEN_GET_SENSOR_READING', get_option('sleep-between-get-sensor-reading'))
+conf_data.set('POLL_SENSOR_TIMER_INTERVAL', get_option('poll-sensor-timer-interval'))
 conf_data.set('MAXIMUM_TRANSFER_SIZE', get_option('maximum-transfer-size'))
 conf_data.set_quoted('EID_TO_NAME_JSON', join_paths(package_datadir, 'eid_to_name.json'))
 if get_option('transport-implementation') == 'mctp-demux'
