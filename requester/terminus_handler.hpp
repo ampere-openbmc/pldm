@@ -250,6 +250,22 @@ class TerminusHandler
      */
     void createCompactNummericSensorIntf(const PDRList& sensorPDRs);
 
+    /** @brief Parse numeric effecter PDRs and create the effecter sensor D-Bus
+     *  objects
+     *
+     *  @param[in] effecterPDRs - device effecter PDRs
+     *
+     */
+    void createNummericEffecterDBusIntf(const PDRList& effecterPDRs);
+
+    /** @brief Parse aux name PDRs and populate the aux name mapping
+     *         lookup data structure
+     *
+     *  @param[in] auxNamePDRs - device effecter aux name PDRs
+     *
+     */
+    void parseAuxNamePDRs(const PDRList& auxNamePDRs);
+
     /** @brief map that captures various terminus information **/
     TLPDRMap tlPDRInfo;
 
@@ -314,11 +330,15 @@ class TerminusHandler
 
     /** @brief Terminus handle */
     uint16_t terminusHandle = 0;
+    /** @brief List of mapping form effecter key to effecter name */
+    auxNameMapping _auxNameMaps;
     /** @brief DBus object state. */
     SensorState _state;
 
     /** @brief Store the specifications of sensor objects */
     std::map<sensor_key, std::unique_ptr<PldmSensor>> _sensorObjects;
+    /** @brief List of numeric effecter keys */
+    std::vector<sensor_key> _effecterLists;
     /** @brief Identify the D-Bus interface for the sensors is created */
     bool createdDbusObject = false;
 };
