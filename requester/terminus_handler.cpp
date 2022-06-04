@@ -1525,6 +1525,19 @@ void TerminusHandler::removeUnavailableSensor(
     return;
 }
 
+void TerminusHandler::removeEffecterFromPollingList(
+    const std::vector<sensor_key>& vKeys)
+{
+    for (const auto& key : vKeys)
+    {
+        if (_state.find(key) != _state.end())
+        {
+            _state.erase(key);
+        }
+    }
+    return;
+}
+
 /** @brief Start reading the sensors info process
  */
 void TerminusHandler::pollSensors()
@@ -1602,6 +1615,14 @@ bool verifySensorFunctionalStatus(const uint8_t& pdrType,
             return false;
         }
     }
+    else if (pdrType == PLDM_NUMERIC_EFFECTER_PDR)
+    {
+        /* enabled-updatePending, enabled-noUpdatePending */
+        if ((operationState != 0) && (operationState != 1))
+        {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -1616,6 +1637,10 @@ requester::Coroutine
     {
         req_byte = PLDM_GET_SENSOR_READING_REQ_BYTES;
     }
+    else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
+    {
+        req_byte = PLDM_GET_NUMERIC_EFFECTER_VALUE_REQ_BYTES;
+    }
     std::vector<uint8_t> requestMsg(sizeof(pldm_msg_hdr) + req_byte);
     auto request = reinterpret_cast<pldm_msg*>(requestMsg.data());
     uint8_t rearmEventState = 1;
@@ -1626,6 +1651,11 @@ requester::Coroutine
     {
         rc = encode_get_sensor_reading_req(instanceId, sensor_id,
                                            rearmEventState, request);
+    }
+    else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
+    {
+        rc = encode_get_numeric_effecter_value_req(instanceId, sensor_id,
+                                                   request);
     }
 
     if (rc != PLDM_SUCCESS)
@@ -1640,6 +1670,10 @@ requester::Coroutine
     if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
     {
         cmd = PLDM_GET_SENSOR_READING;
+    }
+    else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
+    {
+        cmd = PLDM_GET_NUMERIC_EFFECTER_VALUE;
     }
 
     Response responseMsg{};
@@ -1677,6 +1711,7 @@ requester::Coroutine
     uint8_t presentState;
     uint8_t previousState;
     uint8_t eventState;
+    uint8_t pendingValue[4];
 
     if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
     {
@@ -1684,6 +1719,12 @@ requester::Coroutine
             response, respMsgLen, &cc, &dataSize, &operationalState,
             &eventMessEn, &presentState, &previousState, &eventState,
             presentReading);
+    }
+    else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
+    {
+        rc = decode_get_numeric_effecter_value_resp(
+            response, respMsgLen, &cc, &dataSize, &operationalState,
+            pendingValue, presentReading);
     }
 
     if (rc != PLDM_SUCCESS || cc != PLDM_SUCCESS)
@@ -1754,6 +1795,15 @@ requester::Coroutine
             throw;
         }
         co_return PLDM_SUCCESS;
+    }
+
+    /* clean up effecter from polling sensor list after first read */
+    if (_effecterLists.size() > 0)
+    {
+        std::cerr << "Remove " << _effecterLists.size() << " effecter from "
+                  << " polling list after first read." << std::endl;
+        removeEffecterFromPollingList(std::move(_effecterLists));
+        _effecterLists.clear();
     }
 
     if (debugPollSensor)

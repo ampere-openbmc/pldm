@@ -315,6 +315,19 @@ class TerminusHandler
      */
     void removeUnavailableSensor(const std::vector<sensor_key>& vKeys);
 
+    /** @brief Remove the effecter from polling list after first reading
+     *
+     *  @details Because the effecter is not changed after power on the
+     *  terminus. It can only changed by user thru updating the value property
+     *  of effecter D-Bus interface. This actions is covered in those PLDM code 
+     *
+     *  @param[in] vKeys - List of sensor keys
+     *
+     *  @return - none
+     *
+     */
+    void removeEffecterFromPollingList(const std::vector<sensor_key>& vKeys);
+
     /** @brief map that captures various terminus information **/
     TLPDRMap tlPDRInfo;
 
@@ -410,7 +423,6 @@ class TerminusHandler
     bool pollingSensors = false;
     /** @brief Enable the measurement in polling sensors */
     bool debugPollSensor = true;
-
 };
 
 } // namespace terminus
