@@ -1614,7 +1614,7 @@ bool verifySensorFunctionalStatus(const uint8_t& pdrType,
     if (pdrType == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
     {
         /* enabled */
-        if (operationState != 0)
+        if (operationState != PLDM_SENSOR_ENABLED)
         {
             return false;
         }
@@ -1622,7 +1622,30 @@ bool verifySensorFunctionalStatus(const uint8_t& pdrType,
     else if (pdrType == PLDM_NUMERIC_EFFECTER_PDR)
     {
         /* enabled-updatePending, enabled-noUpdatePending */
-        if ((operationState != 0) && (operationState != 1))
+        if ((operationState != EFFECTER_OPER_STATE_ENABLED_UPDATEPENDING) &&
+            (operationState != EFFECTER_OPER_STATE_ENABLED_NOUPDATEPENDING))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool verifySensorAvailableStatus(const uint8_t& pdrType,
+                                  const uint8_t& operationState)
+{
+    if (pdrType == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
+    {
+        /* unavailable */
+        if (operationState == PLDM_SENSOR_UNAVAILABLE)
+        {
+            return false;
+        }
+    }
+    else if (pdrType == PLDM_NUMERIC_EFFECTER_PDR)
+    {
+        /* unavailable */
+        if (operationState == EFFECTER_OPER_STATE_UNAVAILABLE)
         {
             return false;
         }
@@ -1764,8 +1787,10 @@ requester::Coroutine
             _sensorObjects[this->sensorIdx->first];
         bool functional = verifySensorFunctionalStatus(
             std::get<2>(this->sensorIdx->first), operationalState);
+        bool available = verifySensorAvailableStatus(
+            std::get<2>(this->sensorIdx->first), operationalState);
         /* the CompactNumericSensor is unavailable */
-        if (!functional)
+        if (!available)
         {
             unavailableSensorKeys.push_back(this->sensorIdx->first);
         }
