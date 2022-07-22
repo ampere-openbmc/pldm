@@ -424,6 +424,8 @@ class TerminusHandler
     bool pollingSensors = false;
     /** @brief Enable the measurement in polling sensors */
     bool debugPollSensor = true;
+    /** @brief whether response received for getsensorreading pldm command  */
+    bool sendingPldmCommand = false;
     std::shared_ptr<PldmMessagePollEvent> eventDataHndl;
 };
 

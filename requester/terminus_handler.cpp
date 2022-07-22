@@ -1496,17 +1496,23 @@ void TerminusHandler::parseAuxNamePDRs(const PDRList& sensorPDRs)
 void TerminusHandler::updateSensor()
 {
     readCount = 0;
-    std::function<void()> callback(
+    std::function<void()> pollCallback(
         std::bind(&TerminusHandler::pollSensors, this));
+    std::function<void()> readCallback(
+        std::bind(&TerminusHandler::readSensor, this));
+
     try
     {
         _timer.restart(std::chrono::milliseconds(POLL_SENSOR_TIMER_INTERVAL));
+        _timer2.restart(
+            std::chrono::milliseconds(SLEEP_BETWEEN_GET_SENSOR_READING));
     }
     catch (const std::exception& e)
     {
         std::cerr << "Error in sysfs polling loop" << std::endl;
         throw;
     }
+
     return;
 }
 
@@ -1526,6 +1532,7 @@ void TerminusHandler::removeUnavailableSensor(
             _sensorObjects.erase(key);
         }
     }
+
     return;
 }
 
@@ -1539,6 +1546,7 @@ void TerminusHandler::removeEffecterFromPollingList(
             _state.erase(key);
         }
     }
+
     return;
 }
 
@@ -1574,8 +1582,6 @@ void TerminusHandler::pollSensors()
     pollingSensors = true;
     readCount++;
 
-    readSensor();
-
     return;
 }
 
@@ -1588,6 +1594,16 @@ void TerminusHandler::readSensor()
         return;
     }
 
+    if (!pollingSensors)
+    {
+        return;
+    }
+
+    if (sendingPldmCommand)
+    {
+        return;
+    }
+
     if (this->sensorIdx == _state.begin() && debugPollSensor)
     {
         startTime = std::chrono::system_clock::now();
@@ -1595,15 +1611,32 @@ void TerminusHandler::readSensor()
                   << "Start new pollSensor at " << getCurrentSystemTime()
                   << std::endl;
         /* Stop print polling debug after 50 rounds */
-        if (readCount > 5000)
+        if (readCount > 50)
         {
             debugPollSensor = false;
         }
     }
-    /* stop sleep timer */
-    _timer2.setEnabled(false);
-    getSensorReading(get<1>(this->sensorIdx->first),
-                     get<2>(this->sensorIdx->first));
+
+    if (this->sensorIdx != _state.end())
+    {
+        getSensorReading(get<1>(this->sensorIdx->first),
+                         get<2>(this->sensorIdx->first));
+    }
+    else
+    {
+        pollingSensors = false;
+
+        if (debugPollSensor)
+        {
+            std::chrono::duration<double> elapsed_seconds =
+                std::chrono::system_clock::now() - startTime;
+            std::cerr << eidToName.second << ":[" << readCount << "]"
+                    << " Finish one pollsensor round after "
+                    << elapsed_seconds.count() << "s at "
+                    << getCurrentSystemTime() << std::endl;
+            ;
+        }
+    }
 
     return;
 }
@@ -1660,6 +1693,8 @@ requester::Coroutine
                                       const uint8_t& pdr_type)
 {
     uint8_t req_byte = PLDM_GET_SENSOR_READING_REQ_BYTES;
+    sendingPldmCommand = true;
+
     if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
     {
         req_byte = PLDM_GET_SENSOR_READING_REQ_BYTES;
@@ -1807,44 +1842,9 @@ requester::Coroutine
         }
     }
 
-    pollingSensors = false;
-
     /* polling next sensor */
     this->sensorIdx++;
-    if (this->sensorIdx != _state.end())
-    {
-        try
-        {
-            _timer2.restart(
-                std::chrono::milliseconds(SLEEP_BETWEEN_GET_SENSOR_READING));
-        }
-        catch (const std::exception& e)
-        {
-            std::cerr << "Error in sysfs polling loop" << std::endl;
-            throw;
-        }
-        co_return PLDM_SUCCESS;
-    }
-
-    /* clean up effecter from polling sensor list after first read */
-    if (_effecterLists.size() > 0)
-    {
-        std::cerr << "Remove " << _effecterLists.size() << " effecter from "
-                  << " polling list after first read." << std::endl;
-        removeEffecterFromPollingList(std::move(_effecterLists));
-        _effecterLists.clear();
-    }
-
-    if (debugPollSensor)
-    {
-        std::chrono::duration<double> elapsed_seconds =
-            std::chrono::system_clock::now() - startTime;
-        std::cerr << eidToName.second << ":[" << readCount << "]"
-                  << " Finish one pollsensor round after "
-                  << elapsed_seconds.count() << "s at "
-                  << getCurrentSystemTime() << std::endl;
-        ;
-    }
+    sendingPldmCommand = false;
 
     co_return PLDM_SUCCESS;
 }
