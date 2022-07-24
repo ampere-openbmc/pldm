@@ -83,7 +83,7 @@ class Manager
                 eidMap = eidToNameMaps[it];
             }
             dev->udpateEidMapping(eidMap);
-            dev->discoveryTerminus();
+            [[maybe_unused]] auto co = dev->discoveryTerminus();
             dev->updateSensor();
             mDevices[it] = std::move(dev);
         }

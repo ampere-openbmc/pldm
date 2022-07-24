@@ -303,8 +303,18 @@ class TerminusHandler
      *  @return - none
      *
      */
-    requester::Coroutine getSensorReading(const uint16_t& sensor_id,
-                                          const uint8_t& pdr_type);
+    void getSensorReading(uint16_t sensor_id, uint8_t pdr_type);
+
+    /** @brief Process response data from the getSensorReading request
+     *
+     *  @param[in] response - response message
+     *  @param[in] respMsgLen - response message length
+     *
+     *  @return - none
+     *
+     */
+    void processSensorReading(mctp_eid_t, const pldm_msg* response,
+                              size_t respMsgLen);
 
     /** @brief Remove the sensor which response OperationState as not enabled
      *  in GetSensorReading command

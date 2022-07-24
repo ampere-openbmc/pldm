@@ -1631,10 +1631,10 @@ void TerminusHandler::readSensor()
             std::chrono::duration<double> elapsed_seconds =
                 std::chrono::system_clock::now() - startTime;
             std::cerr << eidToName.second << ":[" << readCount << "]"
-                    << " Finish one pollsensor round after "
-                    << elapsed_seconds.count() << "s at "
-                    << getCurrentSystemTime() << std::endl;
-            ;
+                      << " Finish one pollsensor round after "
+                      << elapsed_seconds.count() << "s at "
+                      << getCurrentSystemTime()
+                      << std::endl;
         }
     }
 
@@ -1686,138 +1686,89 @@ bool verifySensorAvailableStatus(const uint8_t& pdrType,
     return true;
 }
 
-/** @brief Send the getSensorReading request to get sensor info
+/** @brief Callback function to process the response data after send the
+ * getSensorReading request thru PLDM
  */
-requester::Coroutine
-    TerminusHandler::getSensorReading(const uint16_t& sensor_id,
-                                      const uint8_t& pdr_type)
+void TerminusHandler::processSensorReading(mctp_eid_t, const pldm_msg* response,
+                                           size_t respMsgLen)
 {
-    uint8_t req_byte = PLDM_GET_SENSOR_READING_REQ_BYTES;
-    sendingPldmCommand = true;
-
-    if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
-    {
-        req_byte = PLDM_GET_SENSOR_READING_REQ_BYTES;
-    }
-    else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
-    {
-        req_byte = PLDM_GET_NUMERIC_EFFECTER_VALUE_REQ_BYTES;
-    }
-    std::vector<uint8_t> requestMsg(sizeof(pldm_msg_hdr) + req_byte);
-    auto request = reinterpret_cast<pldm_msg*>(requestMsg.data());
-    uint8_t rearmEventState = 1;
-    auto instanceId = requester.getInstanceId(eid);
-
-    int rc = PLDM_ERROR;
-    if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
-    {
-        rc = encode_get_sensor_reading_req(instanceId, sensor_id,
-                                           rearmEventState, request);
-    }
-    else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
-    {
-        rc = encode_get_numeric_effecter_value_req(instanceId, sensor_id,
-                                                   request);
-    }
-
-    if (rc != PLDM_SUCCESS)
-    {
-        requester.markFree(eid, instanceId);
-        std::cerr << "Failed to reading sensor/effecter, rc = " << rc
-                  << std::endl;
-        co_return rc;
-    }
-
-    uint8_t cmd = PLDM_GET_SENSOR_READING;
-    if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
-    {
-        cmd = PLDM_GET_SENSOR_READING;
-    }
-    else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
-    {
-        cmd = PLDM_GET_NUMERIC_EFFECTER_VALUE;
-    }
-
-    Response responseMsg{};
-    rc = co_await requester::sendRecvPldmMsg(*handler, eid, requestMsg,
-                                             responseMsg);
-    if (rc)
-    {
-        std::cerr << "Failed to send sendRecvPldmMsg, EID=" << unsigned(eid)
-                  << ", instanceId=" << unsigned(instanceId)
-                  << ", type=" << unsigned(PLDM_PLATFORM)
-                  << ", cmd= " << unsigned(cmd) << ", rc=" << unsigned(rc)
-                  << std::endl;
-        ;
-        co_return rc;
-    }
-
-    auto respMsgLen = responseMsg.size() - sizeof(struct pldm_msg_hdr);
-    auto response = reinterpret_cast<pldm_msg*>(responseMsg.data());
     if (response == nullptr || !respMsgLen)
     {
-        std::cerr << "No response received for sendRecvPldmMsg, EID="
-                  << unsigned(eid) << ", instanceId=" << unsigned(instanceId)
-                  << ", type=" << unsigned(PLDM_PLATFORM)
-                  << ", cmd= " << unsigned(cmd) << ", rc=" << unsigned(rc)
-                  << std::endl;
-        ;
-        co_return rc;
-    }
-
-    uint8_t presentReading[4];
-    uint8_t cc = 0;
-    uint8_t dataSize = PLDM_SENSOR_DATA_SIZE_SINT32;
-    uint8_t operationalState;
-    uint8_t eventMessEn;
-    uint8_t presentState;
-    uint8_t previousState;
-    uint8_t eventState;
-    uint8_t pendingValue[4];
-
-    if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
-    {
-        rc = decode_get_sensor_reading_resp(
-            response, respMsgLen, &cc, &dataSize, &operationalState,
-            &eventMessEn, &presentState, &previousState, &eventState,
-            presentReading);
-    }
-    else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
-    {
-        rc = decode_get_numeric_effecter_value_resp(
-            response, respMsgLen, &cc, &dataSize, &operationalState,
-            pendingValue, presentReading);
-    }
-
-    if (rc != PLDM_SUCCESS || cc != PLDM_SUCCESS)
-    {
         auto sid = std::get<1>(this->sensorIdx->first);
-        std::cerr << "Failed to decode get sensor value: "
-                  << "rc=" << unsigned(rc) << ",cc=" << unsigned(cc) << " "
-                  << unsigned(eid) << ":" << sid << std::endl;
+        std::cerr << "Failed to receive response for the GetSensorReading"
+                  << " command of eid:sensor " << unsigned(eid) << ":"
+                  << sid << std::endl;
     }
     else
     {
-        SensorValueType sensorValue = std::numeric_limits<double>::quiet_NaN();
-        if (dataSize == PLDM_SENSOR_DATA_SIZE_UINT8 ||
-            dataSize == PLDM_SENSOR_DATA_SIZE_SINT8)
-        {
-            uint8_t* val = (uint8_t*)(presentReading);
-            sensorValue = (double)(*val);
-        }
-        else if (dataSize == PLDM_SENSOR_DATA_SIZE_UINT16 ||
-                 dataSize == PLDM_SENSOR_DATA_SIZE_SINT16)
-        {
-            uint16_t* val = (uint16_t*)(presentReading);
-            sensorValue = (double)le16toh(*val);
-        }
-        else if (dataSize == PLDM_SENSOR_DATA_SIZE_UINT32 ||
-                 dataSize == PLDM_SENSOR_DATA_SIZE_SINT32)
-        {
-            uint32_t* val = (uint32_t*)(presentReading);
-            sensorValue = (double)le32toh(*val);
-        }
+        int rc = PLDM_ERROR;
+        uint8_t pdr_type = std::get<2>(this->sensorIdx->first);
+        union_range_field_format presentReading;
+        uint8_t cc = 0;
+        uint8_t dataSize = PLDM_SENSOR_DATA_SIZE_SINT32;
+        uint8_t operationalState = PLDM_SENSOR_ENABLED;
+        uint8_t eventMessEn;
+        uint8_t presentState;
+        uint8_t previousState;
+        uint8_t eventState;
+        union_range_field_format pendingValue;
+        SensorValueType sensorValue =
+                std::numeric_limits<double>::quiet_NaN();
 
+        if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
+        {
+            rc = decode_get_sensor_reading_resp(
+                response, respMsgLen, &cc, &dataSize, &operationalState,
+                &eventMessEn, &presentState, &previousState, &eventState,
+                reinterpret_cast<uint8_t*>(&presentReading));
+        }
+        else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
+        {
+            rc = decode_get_numeric_effecter_value_resp(
+                response, respMsgLen, &cc, &dataSize, &operationalState,
+                reinterpret_cast<uint8_t*>(&pendingValue),
+                reinterpret_cast<uint8_t*>(&presentReading));
+        }
+        if (rc != PLDM_SUCCESS || cc != PLDM_SUCCESS)
+        {
+            auto sid = std::get<1>(this->sensorIdx->first);
+            std::cerr << "Failed to decode get sensor value: "
+                    << "rc=" << unsigned(rc) << ",cc=" << unsigned(cc) << " "
+                    << unsigned(eid) << ":" << sid << std::endl;
+            sensorValue = std::numeric_limits<double>::quiet_NaN();
+            operationalState = PLDM_SENSOR_ENABLED;
+        }
+        else
+        {
+            switch (dataSize)
+            {
+                case PLDM_SENSOR_DATA_SIZE_UINT8:
+                    sensorValue = static_cast<double>(presentReading.value_u8);
+                    break;
+                case PLDM_SENSOR_DATA_SIZE_SINT8:
+                    sensorValue = static_cast<double>(presentReading.value_s8);
+                    break;
+                case PLDM_SENSOR_DATA_SIZE_UINT16:
+                    sensorValue =
+                        static_cast<double>(presentReading.value_u16);
+                    break;
+                case PLDM_SENSOR_DATA_SIZE_SINT16:
+                    sensorValue =
+                        static_cast<double>(presentReading.value_s16);
+                    break;
+                case PLDM_SENSOR_DATA_SIZE_UINT32:
+                    sensorValue =
+                        static_cast<double>(presentReading.value_u32);
+                    break;
+                case PLDM_SENSOR_DATA_SIZE_SINT32:
+                    sensorValue =
+                        static_cast<double>(presentReading.value_s32);
+                    break;
+                default:
+                    sensorValue = std::numeric_limits<double>::quiet_NaN();
+                    break;
+            }
+        }
         std::unique_ptr<PldmSensor>& sensorObj =
             _sensorObjects[this->sensorIdx->first];
         bool functional = verifySensorFunctionalStatus(
@@ -1840,13 +1791,76 @@ requester::Coroutine
             sensorObj->setFunctionalStatus(functional);
             sensorObj->updateValue(sensorValue);
         }
+        this->sensorIdx++;
     }
-
-    /* polling next sensor */
-    this->sensorIdx++;
     sendingPldmCommand = false;
 
-    co_return PLDM_SUCCESS;
+    return;
+}
+
+/** @brief Send the getSensorReading request to get sensor info
+ */
+void TerminusHandler::getSensorReading(uint16_t sensor_id, uint8_t pdr_type)
+{
+    uint8_t req_byte = PLDM_GET_SENSOR_READING_REQ_BYTES;
+
+    sendingPldmCommand = true;
+    if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
+    {
+        req_byte = PLDM_GET_SENSOR_READING_REQ_BYTES;
+    }
+    else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
+    {
+        req_byte = PLDM_GET_NUMERIC_EFFECTER_VALUE_REQ_BYTES;
+    }
+
+    std::vector<uint8_t> requestMsg(sizeof(pldm_msg_hdr) + req_byte);
+    auto request = reinterpret_cast<pldm_msg*>(requestMsg.data());
+    uint8_t rearmEventState = 1;
+    auto instanceId = requester.getInstanceId(eid);
+
+    int rc = PLDM_ERROR;
+    if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
+    {
+        rc = encode_get_sensor_reading_req(instanceId, sensor_id,
+                                           rearmEventState, request);
+    }
+    else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
+    {
+        rc = encode_get_numeric_effecter_value_req(instanceId, sensor_id,
+                                                   request);
+    }
+
+    if (rc != PLDM_SUCCESS)
+    {
+        requester.markFree(eid, instanceId);
+        std::cerr << "Failed to reading sensor/effecter, rc = " << rc
+                  << std::endl;
+        return;
+    }
+
+    uint8_t cmd = PLDM_GET_SENSOR_READING;
+    if (pdr_type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
+    {
+        cmd = PLDM_GET_SENSOR_READING;
+    }
+    else if (pdr_type == PLDM_NUMERIC_EFFECTER_PDR)
+    {
+        cmd = PLDM_GET_NUMERIC_EFFECTER_VALUE;
+    }
+
+    rc = handler->registerRequest(
+        eid, instanceId, PLDM_PLATFORM, cmd,
+        std::move(requestMsg),
+        std::move(std::bind_front(&TerminusHandler::processSensorReading,
+            this)));
+    if (rc)
+    {
+        std::cerr << "Failed to send reading sensor/effecter request to Host"
+                  << std::endl;
+    }
+
+    return;
 }
 
 } // namespace terminus
