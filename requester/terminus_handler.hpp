@@ -339,6 +339,15 @@ class TerminusHandler
      */
     void removeEffecterFromPollingList(const std::vector<sensor_key>& vKeys);
 
+    /** @brief Create/Update list of sensor keys which will be polling
+     *
+     *  @param[in] none
+     *
+     *  @return - none
+     *
+     */
+    void updateSensorKeys();
+
     /** @brief map that captures various terminus information **/
     TLPDRMap tlPDRInfo;
 
@@ -415,7 +424,8 @@ class TerminusHandler
     /** @brief Identify the D-Bus interface for the sensors is created */
     bool createdDbusObject = false;
     /* The point to the reading sensors */
-    std::map<sensor_key, mapped_type>::iterator sensorIdx;
+    std::vector<sensor_key>::iterator sensorKey;
+    std::vector<sensor_key> sensorKeys;
     std::vector<sensor_key> unavailableSensorKeys;
     /** @brief Poll sensor timer. Reset after each poll-sensor-timer-interval
      *  milliseconds. poll-sensor-timer-interval is package configuration.
@@ -436,6 +446,7 @@ class TerminusHandler
     bool debugPollSensor = true;
     /** @brief whether response received for getsensorreading pldm command  */
     bool sendingPldmCommand = false;
+    bool continuePollSensor = false;
     std::shared_ptr<PldmMessagePollEvent> eventDataHndl;
 };
 

@@ -32,6 +32,7 @@ TerminusHandler::TerminusHandler(
 
 TerminusHandler::~TerminusHandler()
 {
+    continuePollSensor = false;
     this->frus.clear();
     this->compNumSensorPDRs.clear();
     this->effecterAuxNamePDRs.clear();
@@ -39,6 +40,12 @@ TerminusHandler::~TerminusHandler()
     this->_state.clear();
     this->_sensorObjects.clear();
     this->_effecterLists.clear();
+    this->eventDataHndl.reset();
+    this->_auxNameMaps.clear();
+    this->parents.clear();
+    pldm_pdr_remove_remote_pdrs(repo);
+    pldm_entity_association_tree_destroy_root(entityTree);
+    pldm_entity_association_tree_copy_root(bmcEntityTree, entityTree);
 }
 
 requester::Coroutine TerminusHandler::discoveryTerminus()
@@ -180,6 +187,7 @@ requester::Coroutine TerminusHandler::discoveryTerminus()
             {
                 createdDbusObject = true;
             }
+            updateSensorKeys();
         }
     }
 
@@ -1496,6 +1504,7 @@ void TerminusHandler::parseAuxNamePDRs(const PDRList& sensorPDRs)
 void TerminusHandler::updateSensor()
 {
     readCount = 0;
+    continuePollSensor = true;
     std::function<void()> pollCallback(
         std::bind(&TerminusHandler::pollSensors, this));
     std::function<void()> readCallback(
@@ -1532,6 +1541,7 @@ void TerminusHandler::removeUnavailableSensor(
             _sensorObjects.erase(key);
         }
     }
+    updateSensorKeys();
 
     return;
 }
@@ -1546,6 +1556,7 @@ void TerminusHandler::removeEffecterFromPollingList(
             _state.erase(key);
         }
     }
+    updateSensorKeys();
 
     return;
 }
@@ -1555,6 +1566,11 @@ void TerminusHandler::removeEffecterFromPollingList(
 void TerminusHandler::pollSensors()
 {
     if (!isTerminusOn())
+    {
+        return;
+    }
+
+    if (!continuePollSensor)
     {
         return;
     }
@@ -1578,7 +1594,7 @@ void TerminusHandler::pollSensors()
         unavailableSensorKeys.clear();
     }
 
-    this->sensorIdx = _state.begin();
+    this->sensorKey = sensorKeys.begin();
     pollingSensors = true;
     readCount++;
 
@@ -1594,6 +1610,11 @@ void TerminusHandler::readSensor()
         return;
     }
 
+    if (!continuePollSensor)
+    {
+        return;
+    }
+
     if (!pollingSensors)
     {
         return;
@@ -1604,7 +1625,7 @@ void TerminusHandler::readSensor()
         return;
     }
 
-    if (this->sensorIdx == _state.begin() && debugPollSensor)
+    if (this->sensorKey == sensorKeys.begin() && debugPollSensor)
     {
         startTime = std::chrono::system_clock::now();
         std::cerr << eidToName.second << ":[" << readCount << "]"
@@ -1617,10 +1638,10 @@ void TerminusHandler::readSensor()
         }
     }
 
-    if (this->sensorIdx != _state.end())
+    if (this->sensorKey != sensorKeys.end())
     {
-        getSensorReading(get<1>(this->sensorIdx->first),
-                         get<2>(this->sensorIdx->first));
+        getSensorReading(get<1>(*(this->sensorKey)),
+                         get<2>(*(this->sensorKey)));
     }
     else
     {
@@ -1694,7 +1715,7 @@ void TerminusHandler::processSensorReading(mctp_eid_t, const pldm_msg* response,
 {
     if (response == nullptr || !respMsgLen)
     {
-        auto sid = std::get<1>(this->sensorIdx->first);
+        auto sid = std::get<1>(*(this->sensorKey));
         std::cerr << "Failed to receive response for the GetSensorReading"
                   << " command of eid:sensor " << unsigned(eid) << ":"
                   << sid << std::endl;
@@ -1702,7 +1723,7 @@ void TerminusHandler::processSensorReading(mctp_eid_t, const pldm_msg* response,
     else
     {
         int rc = PLDM_ERROR;
-        uint8_t pdr_type = std::get<2>(this->sensorIdx->first);
+        uint8_t pdr_type = std::get<2>(*(this->sensorKey));
         union_range_field_format presentReading;
         uint8_t cc = 0;
         uint8_t dataSize = PLDM_SENSOR_DATA_SIZE_SINT32;
@@ -1731,7 +1752,7 @@ void TerminusHandler::processSensorReading(mctp_eid_t, const pldm_msg* response,
         }
         if (rc != PLDM_SUCCESS || cc != PLDM_SUCCESS)
         {
-            auto sid = std::get<1>(this->sensorIdx->first);
+            auto sid = std::get<1>(*(this->sensorKey));
             std::cerr << "Failed to decode get sensor value: "
                     << "rc=" << unsigned(rc) << ",cc=" << unsigned(cc) << " "
                     << unsigned(eid) << ":" << sid << std::endl;
@@ -1770,15 +1791,15 @@ void TerminusHandler::processSensorReading(mctp_eid_t, const pldm_msg* response,
             }
         }
         std::unique_ptr<PldmSensor>& sensorObj =
-            _sensorObjects[this->sensorIdx->first];
+            _sensorObjects[*(this->sensorKey)];
         bool functional = verifySensorFunctionalStatus(
-            std::get<2>(this->sensorIdx->first), operationalState);
+            std::get<2>(*(this->sensorKey)), operationalState);
         bool available = verifySensorAvailableStatus(
-            std::get<2>(this->sensorIdx->first), operationalState);
+            std::get<2>(*(this->sensorKey)), operationalState);
         /* the CompactNumericSensor is unavailable */
         if (!available)
         {
-            unavailableSensorKeys.push_back(this->sensorIdx->first);
+            unavailableSensorKeys.push_back(*(this->sensorKey));
         }
 
         if (sensorObj)
@@ -1791,7 +1812,7 @@ void TerminusHandler::processSensorReading(mctp_eid_t, const pldm_msg* response,
             sensorObj->setFunctionalStatus(functional);
             sensorObj->updateValue(sensorValue);
         }
-        this->sensorIdx++;
+        this->sensorKey++;
     }
     sendingPldmCommand = false;
 
@@ -1861,6 +1882,14 @@ void TerminusHandler::getSensorReading(uint16_t sensor_id, uint8_t pdr_type)
     }
 
     return;
+}
+
+void TerminusHandler::updateSensorKeys()
+{
+    sensorKeys.clear();
+    for(auto it = _state.begin(); it != _state.end(); ++it) {
+        sensorKeys.push_back(it->first);
+    }
 }
 
 } // namespace terminus
