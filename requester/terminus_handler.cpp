@@ -30,6 +30,9 @@ TerminusHandler::TerminusHandler(
 TerminusHandler::~TerminusHandler()
 {
     this->frus.clear();
+    this->compNumSensorPDRs.clear();
+    this->effecterAuxNamePDRs.clear();
+    this->effecterPDRs.clear();
 }
 
 requester::Coroutine TerminusHandler::discoveryTerminus()
@@ -126,6 +129,35 @@ requester::Coroutine TerminusHandler::discoveryTerminus()
         {
             std::cerr << "Failed to setEventReceiver, rc=" << unsigned(rc)
                       << std::endl;
+        }
+    }
+
+    if (supportPLDMType(PLDM_PLATFORM))
+    {
+        if (debugGetPDR)
+        {
+            startTime = std::chrono::system_clock::now();
+            std::cerr << eidToName.second << " Start GetPDR at "
+                      << getCurrentSystemTime() << std::endl;
+        }
+
+        rc = co_await getDevPDR(0);
+        if (rc)
+        {
+            std::cerr << "Failed to setEventReceiver, rc=" << unsigned(rc)
+                      << std::endl;
+        }
+        else
+        {
+            readCount = 0;
+            if (debugGetPDR)
+            {
+                std::chrono::duration<double> elapsed_seconds =
+                    std::chrono::system_clock::now() - startTime;
+                std::cerr << eidToName.second << " Finish get all PDR "
+                          << elapsed_seconds.count() << "s at "
+                          << getCurrentSystemTime() << std::endl;
+            }
         }
     }
 
@@ -850,6 +882,262 @@ requester::Coroutine
     parseFruRecordTable(fruRecordTableData.data(), fruRecordTableLength);
 
     co_return cc;
+}
+
+requester::Coroutine TerminusHandler::getDevPDR(uint32_t nextRecordHandle)
+{
+    std::cerr << "Discovery Terminus: " << unsigned(eid)
+              << " get terminus PDRs." << std::endl;
+    do
+    {
+        std::vector<uint8_t> requestMsg(sizeof(pldm_msg_hdr) +
+                                        PLDM_GET_PDR_REQ_BYTES);
+        auto request = reinterpret_cast<pldm_msg*>(requestMsg.data());
+        uint32_t recordHandle{};
+        if (nextRecordHandle)
+        {
+            recordHandle = nextRecordHandle;
+        }
+        auto instanceId = requester.getInstanceId(eid);
+
+        auto rc =
+            encode_get_pdr_req(instanceId, recordHandle, 0, PLDM_GET_FIRSTPART,
+                               UINT16_MAX, 0, request, PLDM_GET_PDR_REQ_BYTES);
+        if (rc != PLDM_SUCCESS)
+        {
+            requester.markFree(eid, instanceId);
+            std::cerr << "Failed to encode_get_pdr_req, rc = " << unsigned(rc)
+                      << std::endl;
+            co_return rc;
+        }
+
+        Response responseMsg{};
+        rc = co_await requester::sendRecvPldmMsg(*handler, eid, requestMsg,
+                                                 responseMsg);
+        if (rc)
+        {
+            std::cerr << "Failed to send sendRecvPldmMsg, EID=" << unsigned(eid)
+                      << ", instanceId=" << unsigned(instanceId)
+                      << ", type=" << unsigned(PLDM_PLATFORM)
+                      << ", cmd= " << unsigned(PLDM_GET_PDR)
+                      << ", rc=" << unsigned(rc) << std::endl;
+            ;
+            co_return rc;
+        }
+
+        auto respMsgLen = responseMsg.size() - sizeof(struct pldm_msg_hdr);
+        auto response = reinterpret_cast<pldm_msg*>(responseMsg.data());
+        if (response == nullptr || !respMsgLen)
+        {
+            std::cerr << "No response received for sendRecvPldmMsg, EID="
+                      << unsigned(eid) << ", instanceId="
+                      << unsigned(instanceId) << ", type="
+                      << unsigned(PLDM_PLATFORM) << ", cmd= "
+                      << unsigned(PLDM_GET_PDR) << ", rc="
+                      << unsigned(rc) << std::endl;
+            ;
+            co_return rc;
+        }
+        rc = co_await processDevPDRs(eid, response, respMsgLen,
+                                     &nextRecordHandle);
+        if (rc)
+        {
+            std::cerr << "Failed to send processDevPDRs, EID=" << unsigned(eid)
+                      << ", rc=" << unsigned(rc) << std::endl;
+            ;
+            co_return rc;
+        }
+    } while (nextRecordHandle != 0);
+
+    if (!nextRecordHandle)
+    {
+        co_return PLDM_SUCCESS;
+    }
+
+    co_return PLDM_ERROR;
+}
+
+requester::Coroutine TerminusHandler::processDevPDRs(mctp_eid_t& /*eid*/,
+                                                     const pldm_msg* response,
+                                                     size_t& respMsgLen,
+                                                     uint32_t* nextRecordHandle)
+{
+    uint8_t tlEid = 0;
+    bool tlValid = true;
+    uint32_t rh = 0;
+    uint8_t tid = 0;
+
+    uint8_t completionCode{};
+    uint32_t nextDataTransferHandle{};
+    uint8_t transferFlag{};
+    uint16_t respCount{};
+    uint8_t transferCRC{};
+    if (response == nullptr || !respMsgLen)
+    {
+        std::cerr << "Failed to receive response for the GetPDR"
+                     " command \n";
+        co_return PLDM_ERROR;
+    }
+
+    auto rc = decode_get_pdr_resp(
+        response, respMsgLen /*- sizeof(pldm_msg_hdr)*/, &completionCode,
+        nextRecordHandle, &nextDataTransferHandle, &transferFlag, &respCount,
+        nullptr, 0, &transferCRC);
+    std::vector<uint8_t> responsePDRMsg;
+    responsePDRMsg.resize(respMsgLen + sizeof(pldm_msg_hdr));
+    memcpy(responsePDRMsg.data(), response, respMsgLen + sizeof(pldm_msg_hdr));
+    if (rc != PLDM_SUCCESS)
+    {
+        std::cerr << "Failed to decode_get_pdr_resp, rc = " << unsigned(rc)
+                  << std::endl;
+        co_return rc;
+    }
+
+    std::vector<uint8_t> pdr(respCount, 0);
+    rc = decode_get_pdr_resp(response, respMsgLen, &completionCode,
+                             nextRecordHandle, &nextDataTransferHandle,
+                             &transferFlag, &respCount, pdr.data(), respCount,
+                             &transferCRC);
+
+    if (rc != PLDM_SUCCESS || completionCode != PLDM_SUCCESS)
+    {
+        std::cerr << "Failed to decode_get_pdr_resp: "
+                  << "rc=" << unsigned(rc)
+                  << ", cc=" << unsigned(completionCode) << std::endl;
+        co_return rc;
+    }
+    // when nextRecordHandle is 0, we need the recordHandle of the last
+    // PDR and not 0-1.
+    if (!(*nextRecordHandle))
+    {
+        rh = *nextRecordHandle;
+    }
+    else
+    {
+        rh = *nextRecordHandle - 1;
+    }
+
+    auto pdrHdr = reinterpret_cast<pldm_pdr_hdr*>(pdr.data());
+    if (!rh)
+    {
+        rh = pdrHdr->record_handle;
+    }
+
+    if (pdrHdr->type == PLDM_PDR_ENTITY_ASSOCIATION)
+    {
+        /* Temporary remove merge Entity Association feature */
+        this->mergeEntityAssociations(pdr);
+        co_return PLDM_SUCCESS;
+    }
+
+    if (pdrHdr->type == PLDM_TERMINUS_LOCATOR_PDR)
+    {
+        auto tlpdr =
+            reinterpret_cast<const pldm_terminus_locator_pdr*>(pdr.data());
+
+        terminusHandle = tlpdr->terminus_handle;
+        tid = tlpdr->tid;
+        auto terminus_locator_type = tlpdr->terminus_locator_type;
+        if (terminus_locator_type == PLDM_TERMINUS_LOCATOR_TYPE_MCTP_EID)
+        {
+            auto locatorValue =
+                reinterpret_cast<const pldm_terminus_locator_type_mctp_eid*>(
+                    tlpdr->terminus_locator_value);
+            tlEid = static_cast<uint8_t>(locatorValue->eid);
+        }
+        if (tlpdr->validity == 0)
+        {
+            tlValid = false;
+        }
+        tlPDRInfo.insert_or_assign(
+            tlpdr->terminus_handle,
+            std::make_tuple(tlpdr->tid, tlEid, tlpdr->validity));
+    }
+    else if (pdrHdr->type == PLDM_COMPACT_NUMERIC_SENSOR_PDR)
+    {
+        this->compNumSensorPDRs.emplace_back(pdr);
+    }
+    else if (pdrHdr->type == PLDM_NUMERIC_EFFECTER_PDR)
+    {
+        this->effecterPDRs.emplace_back(pdr);
+    }
+    else if (pdrHdr->type == PLDM_EFFECTER_AUXILIARY_NAMES_PDR)
+    {
+        this->effecterAuxNamePDRs.emplace_back(pdr);
+    }
+
+    // if the TLPDR is invalid update the repo accordingly
+    if (!tlValid)
+    {
+        pldm_pdr_update_TL_pdr(repo, terminusHandle, tid, tlEid, tlValid);
+    }
+    else
+    {
+        pldm_pdr_add_check(repo, pdr.data(), respCount, true,
+                           terminusHandle, &rh);
+    }
+
+    co_return PLDM_SUCCESS;
+}
+
+void TerminusHandler::mergeEntityAssociations(const std::vector<uint8_t>& pdr)
+{
+    size_t numEntities{};
+    pldm_entity* entities = nullptr;
+    bool merged = false;
+    auto entityPdr = reinterpret_cast<pldm_pdr_entity_association*>(
+        const_cast<uint8_t*>(pdr.data()) + sizeof(pldm_pdr_hdr));
+
+    pldm_entity_association_pdr_extract(pdr.data(), pdr.size(), &numEntities,
+                                        &entities);
+    for (size_t i = 0; i < numEntities; ++i)
+    {
+        pldm_entity parent{};
+        if (getParent(entities[i].entity_type, &parent))
+        {
+            auto node = pldm_entity_association_tree_find(entityTree, &parent);
+            if (node)
+            {
+                pldm_entity_association_tree_add(entityTree, &entities[i],
+                                                 0xFFFF, node,
+                                                 entityPdr->association_type);
+                merged = true;
+            }
+        }
+    }
+
+    if (merged)
+    {
+        // Update our PDR repo with the merged entity association PDRs
+        pldm_entity_node* node = nullptr;
+        pldm_find_entity_ref_in_tree(entityTree, entities[0], &node);
+        if (node == nullptr)
+        {
+            std::cerr
+                << "\ncould not find referrence of the entity in the tree \n";
+        }
+        else
+        {
+            pldm_entity_association_pdr_add_from_node_check(node, repo,
+                                                            &entities,
+                                                            numEntities, true,
+                                                            terminusHandle);
+        }
+    }
+    free(entities);
+}
+
+bool TerminusHandler::getParent(const EntityType& type, pldm_entity* parent)
+{
+    auto found = parents.find(type);
+    if (found != parents.end())
+    {
+        parent->entity_type = found->second.entity_type;
+        parent->entity_instance_num = found->second.entity_instance_num;
+        return true;
+    }
+
+    return false;
 }
 
 } // namespace terminus

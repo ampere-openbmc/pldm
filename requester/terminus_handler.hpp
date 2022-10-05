@@ -21,6 +21,7 @@ namespace terminus
 using namespace pldm::dbus_api;
 
 using BitField8 = bitfield8_t;
+using EntityType = uint16_t;
 
 /** @struct PLDMSupportedCommands
  *  @brief PLDM supported commands
@@ -58,6 +59,7 @@ class TerminusHandler
     using TerminusInfo =
         std::tuple<pdr::TerminusID, pdr::EID, pdr::TerminusValidity>;
     using TLPDRMap = std::map<pdr::TerminusHandle, TerminusInfo>;
+    using PDRList = std::vector<std::vector<uint8_t>>;
 
     /** @brief Constructor
      *  @param[in] eid - MCTP EID of host firmware
@@ -159,6 +161,38 @@ class TerminusHandler
      */
     void parseFruRecordTable(const uint8_t* fruData, size_t& fruLen);
 
+    /** @brief this function sends a GetPDR request to Host firmware.
+     *  And processes the PDRs based on type
+     *
+     *  @param[in] - nextRecordHandle - the next record handle to ask for
+     */
+    requester::Coroutine getDevPDR(uint32_t nextRecordHandle = 0);
+
+    /** @brief Merge host firmware's entity association PDRs into BMC's
+     *  @details A merge operation involves adding a pldm_entity under the
+     *  appropriate parent, and updating container ids.
+     *  @param[in] pdr - entity association pdr
+     */
+    void mergeEntityAssociations(const std::vector<uint8_t>& pdr);
+
+    /** @brief Find parent of input entity type, from the entity association
+     *  tree
+     *  @param[in] type - PLDM entity type
+     *  @param[out] parent - PLDM entity information of parent
+     *  @return bool - true if parent found, false otherwise
+     */
+    bool getParent(const EntityType& type, pldm_entity* parent);
+
+    /** @brief process the Host's PDR and add to BMC's PDR repo
+     *  @param[in] eid - MCTP id of Host
+     *  @param[in] response - response from Host for GetPDR
+     *  @param[in] respMsgLen - response message length
+     */
+    requester::Coroutine processDevPDRs(mctp_eid_t& eid,
+                                        const pldm_msg* response,
+                                        size_t& respMsgLen,
+                                        uint32_t* nextRecordHandle);
+
     /** @brief map that captures various terminus information **/
     TLPDRMap tlPDRInfo;
 
@@ -199,6 +233,30 @@ class TerminusHandler
 
     /** @brief Map of the object FRU */
     std::unordered_map<uint8_t, std::shared_ptr<pldm::dbus_api::FruReq>> frus;
+
+    /** @brief Print in when GetPDR */
+    bool debugGetPDR = true;
+
+    /** @brief The start time of one measuring process */
+    std::chrono::_V2::system_clock::time_point startTime =
+        std::chrono::system_clock::now();
+    /** @brief Measuring time */
+    int readCount = 0;
+
+    /** @brief maps an entity type to parent pldm_entity from the BMC's entity
+     *  association tree
+     */
+    std::map<EntityType, pldm_entity> parents;
+
+    /** @brief List of compack numeric sensor PDRs */
+    PDRList compNumSensorPDRs{};
+    /** @brief List of numeric effecter AUX Name PDRs */
+    PDRList effecterAuxNamePDRs{};
+    /** @brief List of numeric effecter PDRs */
+    PDRList effecterPDRs{};
+
+    /** @brief Terminus handle */
+    uint16_t terminusHandle = 0;
 };
 
 } // namespace terminus
