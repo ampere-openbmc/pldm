@@ -157,6 +157,15 @@ class TerminusHandler
      */
     void updateSensor();
 
+    /** @brief Set terminus handler flag to false to stop polling or discovery
+     *
+     *  @param[in] none
+     *
+     *  @return - none
+     *
+     */
+    void stopTerminusHandler();
+
   private:
     using mapped_type = std::tuple<uint16_t, ObjectInfo>;
     /* sensor_key tuple of eid, sensorId, pdr_type */
@@ -448,6 +457,8 @@ class TerminusHandler
     bool sendingPldmCommand = false;
     bool continuePollSensor = false;
     std::shared_ptr<PldmMessagePollEvent> eventDataHndl;
+    /** @brief the flag to stop polling or discoverying */
+    bool stopTerminusPolling = false;
 };
 
 } // namespace terminus
