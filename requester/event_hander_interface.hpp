@@ -40,6 +40,7 @@ class EventHandlerInterface
     virtual void criticalEventCb();
     void registerEventHandler(uint8_t event_class, HandlerFunc func);
     int enqueueCriticalEvent(uint16_t item);
+    int enqueueOverflowEvent(uint16_t item);
     void startCallback();
     void stopCallback();
 
@@ -63,6 +64,7 @@ class EventHandlerInterface
     void reset();
     void pollReqTimeoutHdl();
     void pollEventReqCb();
+    void clearOverflow();
 
     struct ReqPollInfo
     {
@@ -84,6 +86,7 @@ class EventHandlerInterface
     std::unique_ptr<sdbusplus::Timer> pollReqTimeoutTimer;
     std::map<uint8_t, HandlerFunc> eventHndls;
     std::deque<uint16_t> critEventQueue;
+    std::deque<uint16_t> overflowEventQueue;
     ReqPollInfo reqData;
     RecvPollInfo recvData;
 };

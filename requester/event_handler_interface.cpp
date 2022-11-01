@@ -60,17 +60,29 @@ void EventHandlerInterface::normalEventCb()
 
 void EventHandlerInterface::criticalEventCb()
 {
+    uint16_t eventId = 0;
+
     if (isProcessPolling)
         return;
-    if (critEventQueue.empty())
+    if (critEventQueue.empty() && overflowEventQueue.empty())
     {
         isCritical = false;
         return;
     }
+    if (!overflowEventQueue.empty())
+    {
+        eventId = overflowEventQueue.front();
+    }
+    else
+    {
+        if (!critEventQueue.empty())
+        {
+            eventId = critEventQueue.front();
+            critEventQueue.pop_front();
+        }
+    }
     /* Has Critical Event */
     isCritical = true;
-    uint16_t eventId = critEventQueue.front();
-    critEventQueue.pop_front();
     /* prepare request data */
     reqData.operationFlag = PLDM_GET_FIRSTPART;
     reqData.dataTransferHandle = eventId;
@@ -101,6 +113,34 @@ int EventHandlerInterface::enqueueCriticalEvent(uint16_t item)
     critEventQueue.push_back(item);
 
     return 0;
+}
+
+int EventHandlerInterface::enqueueOverflowEvent(uint16_t item)
+{
+    if (overflowEventQueue.size() > MAX_QUEUE_SIZE)
+        return -1;
+
+    for (auto& i : overflowEventQueue)
+    {
+        if (i == item)
+        {
+            return -2;
+        }
+    }
+
+#ifdef DEBUG
+    std::cout << "\nQUEUING OVERFLOW EVENT_ID " << std::hex << item << "\n";
+#endif
+    // insert to event queue
+    overflowEventQueue.push_back(item);
+
+    return 0;
+}
+
+void EventHandlerInterface::clearOverflow()
+{
+    if (!overflowEventQueue.empty())
+        overflowEventQueue.pop_front();
 }
 
 void EventHandlerInterface::pollReqTimeoutHdl()
@@ -190,6 +230,8 @@ void EventHandlerInterface::processResponseMsg(mctp_eid_t /*eid*/,
     if (retEventId == 0x0 || retEventId == 0xffff)
     {
         reset();
+        if (retEventId == 0x0)
+            clearOverflow();
         return;
     }
 

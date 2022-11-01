@@ -33,6 +33,7 @@ namespace pldm
 {
 
 static std::unique_ptr<sdbusplus::bus::match_t> pldmEventSignal;
+static std::unique_ptr<sdbusplus::bus::match_t> pldmNumericSensorEventSignal;
 static time_t prevTs = 0;
 static int index = 0;
 
@@ -310,6 +311,42 @@ void PldmMessagePollEvent::handlePldmDbusEventSignal()
             catch (const std::exception& e)
             {
                 std::cerr << "subscribePldmDbusEventSignal failed\n"
+                          << e.what() << std::endl;
+            }
+        });
+
+    pldmNumericSensorEventSignal = std::make_unique<sdbusplus::bus::match_t>(
+        pldm::utils::DBusHandler::getBus(),
+        sdbusplus::bus::match::rules::type::signal() +
+            sdbusplus::bus::match::rules::member("NumericSensorEvent") +
+            sdbusplus::bus::match::rules::path("/xyz/openbmc_project/pldm") +
+            sdbusplus::bus::match::rules::interface(
+                "xyz.openbmc_project.PLDM.Event"),
+        [&](sdbusplus::message::message& msg) {
+            try
+            {
+                uint8_t tid{};
+                uint16_t sensorId{};
+                uint8_t eventState{};
+                uint8_t preEventState{};
+                uint8_t sensorDataSize{};
+                uint32_t presentReading{};
+                /*
+                 * Read the information of event
+                 */
+                msg.read(tid, sensorId, eventState, preEventState,
+                         sensorDataSize, presentReading);
+
+                if ((sensorId >= 191) && (sensorId <= 198) )
+                {
+                    // add the priority
+                    std::cerr << "Overflow: " << sensorId << "\n";
+                    this->enqueueOverflowEvent(sensorId);
+                }
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "handleDbusEventSignalMatch failed\n"
                           << e.what() << std::endl;
             }
         });
