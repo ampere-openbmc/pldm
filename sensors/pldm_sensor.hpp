@@ -147,6 +147,14 @@ class PldmSensor
         return sensorPath;
     }
 
+    void initMinMaxValue(double minValue, double maxValue)
+    {
+        sensorMinValue = minValue;
+        sensorMaxValue = maxValue;
+
+        return;
+    }
+
   private:
     std::string _root = "/xyz/openbmc_project/sensors";
     /** @brief reference of main D-bus interface of pldmd devices */
@@ -162,6 +170,8 @@ class PldmSensor
     double warningLow;
     double criticalHigh;
     double criticalLow;
+    double sensorMaxValue = std::numeric_limits<double>::quiet_NaN();
+    double sensorMinValue = std::numeric_limits<double>::quiet_NaN();
     /** @brief Store value interface */
     std::shared_ptr<ValueObject> valueInterface;
     /** @brief Store functional status interface */

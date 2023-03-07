@@ -126,6 +126,14 @@ std::optional<ObjectStateData> PldmSensor::createSensor()
     {
         criticalHigh = adjustValue(criticalHigh);
     }
+    if (!std::isnan(sensorMaxValue))
+    {
+        sensorMaxValue = adjustValue(sensorMaxValue);
+    }
+    if (!std::isnan(sensorMinValue))
+    {
+        sensorMinValue = adjustValue(sensorMinValue);
+    }
     auto type = getAttributes(baseUnit, attrs);
     if (!type)
     {
@@ -137,8 +145,6 @@ std::optional<ObjectStateData> PldmSensor::createSensor()
     sensorPath = _root + "/" + getNamespace(attrs) + "/" + sensorName;
 
     double sensorValue = std::numeric_limits<double>::quiet_NaN();
-    double sensorMaxValue = std::numeric_limits<double>::quiet_NaN();
-    double sensorMinValue = std::numeric_limits<double>::quiet_NaN();
     ObjectInfo info(&_bus, std::move(sensorPath), InterfaceMap());
     try
     {

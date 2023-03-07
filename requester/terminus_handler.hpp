@@ -78,6 +78,10 @@ struct PldmSensorInfo
     PldmSensorValue criticalLow;
     PldmSensorValue fatalHigh;
     PldmSensorValue fatalLow;
+    PldmSensorValue maxSetTable;
+    PldmSensorValue minSetTable;
+    PldmSensorValue maxValue;
+    PldmSensorValue minValue;
     Name sensorName;
 };
 

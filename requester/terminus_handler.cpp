@@ -1321,6 +1321,7 @@ void TerminusHandler::createCompactNummericSensorIntf(const PDRList& sensorPDRs)
 void TerminusHandler::createNummericEffecterDBusIntf(const PDRList& sensorPDRs)
 {
     std::vector<auxNameKey> _addedEffecter;
+
     for (const auto& sensorPDR : sensorPDRs)
     {
         auto pdr = reinterpret_cast<const pldm_numeric_effecter_value_pdr*>(
@@ -1387,6 +1388,51 @@ void TerminusHandler::createNummericEffecterDBusIntf(const PDRList& sensorPDRs)
         sensorInfo.criticalLow = std::numeric_limits<double>::quiet_NaN();
         sensorInfo.fatalHigh = std::numeric_limits<double>::quiet_NaN();
         sensorInfo.fatalLow = std::numeric_limits<double>::quiet_NaN();
+        sensorInfo.maxSetTable = std::numeric_limits<double>::quiet_NaN();
+        sensorInfo.minSetTable = std::numeric_limits<double>::quiet_NaN();
+
+        switch (pdr->effecter_data_size)
+        {
+            case PLDM_SENSOR_DATA_SIZE_UINT8:
+                sensorInfo.maxSetTable =
+                    static_cast<double>(pdr->max_settable.value_u8);
+                sensorInfo.minSetTable =
+                    static_cast<double>(pdr->min_settable.value_u8);
+                break;
+            case PLDM_SENSOR_DATA_SIZE_SINT8:
+                sensorInfo.maxSetTable =
+                    static_cast<double>(pdr->max_settable.value_s8);
+                sensorInfo.minSetTable =
+                    static_cast<double>(pdr->min_settable.value_s8);
+                break;
+            case PLDM_SENSOR_DATA_SIZE_UINT16:
+                sensorInfo.maxSetTable =
+                    static_cast<double>(pdr->max_settable.value_u16);
+                sensorInfo.minSetTable =
+                    static_cast<double>(pdr->min_settable.value_u16);
+                break;
+            case PLDM_SENSOR_DATA_SIZE_SINT16:
+                sensorInfo.maxSetTable =
+                    static_cast<double>(pdr->max_settable.value_s16);
+                sensorInfo.minSetTable =
+                    static_cast<double>(pdr->min_settable.value_s16);
+                break;
+            case PLDM_SENSOR_DATA_SIZE_UINT32:
+                sensorInfo.maxSetTable =
+                    static_cast<double>(pdr->max_settable.value_u32);
+                sensorInfo.minSetTable =
+                    static_cast<double>(pdr->min_settable.value_u32);
+                break;
+            case PLDM_SENSOR_DATA_SIZE_SINT32:
+                sensorInfo.maxSetTable =
+                    static_cast<double>(pdr->max_settable.value_s32);
+                sensorInfo.minSetTable =
+                    static_cast<double>(pdr->min_settable.value_s32);
+                break;
+            default:
+                break;
+        }
+
         auto terminusId = PLDM_TID_RESERVED;
         try
         {
@@ -1426,6 +1472,8 @@ void TerminusHandler::createNummericEffecterDBusIntf(const PDRList& sensorPDRs)
             sensorInfo.warningHigh, sensorInfo.warningLow,
             sensorInfo.criticalHigh, sensorInfo.criticalLow);
 
+        sensorObj->initMinMaxValue(sensorInfo.minSetTable,
+                                   sensorInfo.maxSetTable);
         auto object = sensorObj->createSensor();
         if (object)
         {
