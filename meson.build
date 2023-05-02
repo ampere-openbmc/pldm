@@ -74,6 +74,7 @@ elif get_option('transport-implementation') == 'af-mctp'
 endif
 conf_data.set('DEFAULT_SENSOR_UPDATER_INTERVAL', get_option('default-sensor-update-interval'))
 conf_data.set('SENSOR_POLLING_TIME', get_option('sensor-polling-time'))
+conf_data.set('LOCAL_EID', get_option('local-eid'))
 
 configure_file(output: 'config.h',
   configuration: conf_data
@@ -178,6 +179,7 @@ executable(
   'platform-mc/manager.cpp',
   'platform-mc/sensor_manager.cpp',
   'platform-mc/numeric_sensor.cpp',
+  'platform-mc/event_manager.cpp',
   'requester/mctp_endpoint_discovery.cpp',
   implicit_include_directories: false,
   dependencies: deps,
