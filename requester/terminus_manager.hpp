@@ -1,7 +1,7 @@
 #pragma once
 
 #include "pldmd/dbus_impl_requester.hpp"
-#include "pldmd/instance_id.hpp"
+#include "common/instance_id.hpp"
 #include "requester/handler.hpp"
 #include "requester/request.hpp"
 #include "requester/terminus_handler.hpp"
@@ -76,7 +76,6 @@ class Manager
             auto dev = std::make_unique<TerminusHandler>(
                 it, event, bus, repo, entityTree, bmcEntityTree,
                 handler, instanceIdDb);
-
             std::pair<bool, std::string> eidMap = std::make_pair(true, "");
             if (eidToNameMaps.count(it))
             {

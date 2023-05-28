@@ -2,9 +2,9 @@
 
 #include "libpldm/fru.h"
 
+#include "common/instance_id.hpp"
 #include "common/types.hpp"
 #include "pldmd/dbus_impl_fru.hpp"
-#include "pldmd/dbus_impl_requester.hpp"
 #include "requester/handler.hpp"
 #include "requester/pldm_message_poll_event.hpp"
 #include "sensors/pldm_sensor.hpp"

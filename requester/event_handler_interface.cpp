@@ -28,9 +28,9 @@ namespace pldm
 {
 EventHandlerInterface::EventHandlerInterface(
     uint8_t eid, sdeventplus::Event& event, sdbusplus::bus::bus& bus,
-    pldm::dbus_api::Requester& requester,
+    InstanceIdDb& instanceIdDb,
     pldm::requester::Handler<pldm::requester::Request>* handler) :
-    eid(eid), bus(bus), event(event), requester(requester),
+    eid(eid), bus(bus), event(event), instanceIdDb(instanceIdDb),
     handler(handler),
     normEventTimer(event, std::bind(&EventHandlerInterface::normalEventCb, this)),
     critEventTimer(event, std::bind(&EventHandlerInterface::criticalEventCb, this)),
@@ -279,7 +279,7 @@ void EventHandlerInterface::pollEventReqCb()
               << "dataTransferHandle: " << std::hex << reqData.dataTransferHandle << "\n";
 #endif
 
-    instanceId = requester.getInstanceId(eid);
+    instanceId = instanceIdDb.next(eid);
     auto rc = encode_poll_for_platform_event_message_req(
                     instanceId, 1, reqData.operationFlag,
                     reqData.dataTransferHandle, reqData.eventIdToAck,
@@ -287,7 +287,7 @@ void EventHandlerInterface::pollEventReqCb()
 
     if (rc != PLDM_SUCCESS)
     {
-        requester.markFree(eid, instanceId);
+        instanceIdDb.free(eid, instanceId);
         std::cerr
             << "ERROR: Failed to encode_poll_for_platform_event_message_req(1), rc = "
             << rc << std::endl;

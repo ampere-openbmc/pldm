@@ -38,7 +38,7 @@ class PldmMessagePollEvent : public EventHandlerInterface
 
     explicit PldmMessagePollEvent(
         uint8_t eid, sdeventplus::Event& event, sdbusplus::bus::bus& bus,
-        pldm::dbus_api::Requester& requester,
+        InstanceIdDb& instanceIdDb,
         pldm::requester::Handler<pldm::requester::Request>* handler);
 
   private:

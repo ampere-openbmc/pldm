@@ -4,6 +4,7 @@
 #include "libpldm/fru.h"
 #include "libpldm/platform.h"
 
+#include "common/instance_id.hpp"
 #include "common/types.hpp"
 #include "common/utils.hpp"
 #include "requester/handler.hpp"
@@ -31,7 +32,7 @@ class EventHandlerInterface
   public:
     explicit EventHandlerInterface(
         uint8_t eid, sdeventplus::Event& event, sdbusplus::bus::bus& bus,
-        pldm::dbus_api::Requester& requester,
+        InstanceIdDb& instanceIdDb,
         pldm::requester::Handler<pldm::requester::Request>* handler);
     virtual ~EventHandlerInterface() = default;
 
@@ -50,7 +51,8 @@ class EventHandlerInterface
     uint8_t eid;
     sdbusplus::bus::bus& bus;
     sdeventplus::Event& event;
-    pldm::dbus_api::Requester& requester;
+    /** @brief Instance ID database for managing instance ID*/
+    InstanceIdDb& instanceIdDb;
     pldm::requester::Handler<pldm::requester::Request>* handler;
     sdeventplus::utility::Timer<sdeventplus::ClockId::Monotonic> normEventTimer;
     sdeventplus::utility::Timer<sdeventplus::ClockId::Monotonic> critEventTimer;
