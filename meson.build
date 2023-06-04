@@ -61,6 +61,7 @@ if get_option('oem-ibm').allowed()
   conf_data.set('DMA_MAXSIZE', get_option('oem-ibm-dma-maxsize'))
   add_project_arguments('-DOEM_IBM', language : ['c', 'cpp'])
 endif
+
 conf_data.set('NUMBER_OF_REQUEST_RETRIES', get_option('number-of-request-retries'))
 conf_data.set('INSTANCE_ID_EXPIRATION_INTERVAL',get_option('instance-id-expiration-interval'))
 conf_data.set('RESPONSE_TIME_OUT',get_option('response-time-out'))
@@ -77,6 +78,11 @@ conf_data.set('SENSOR_POLLING_TIME', get_option('sensor-polling-time'))
 conf_data.set('DEFAULT_SENSOR_UPDATER_INTERVAL', get_option('default-sensor-update-interval'))
 conf_data.set_quoted('PLDM_T2_CONFIG_JSON', join_paths(package_datadir, 'pldm_t2_config.json'))
 conf_data.set('LOCAL_EID', get_option('local-eid'))
+if get_option('ampere').enabled()
+  add_project_arguments('-DAMPERE', language : 'c')
+  add_project_arguments('-DAMPERE', language : 'cpp')
+endif
+conf_data.set_quoted('AMPERE_PLDM_EVENT_HANDLER', get_option('ampere-pldm-event-handler-app'))
 
 if get_option('ampere').enabled()
   add_project_arguments('-DAMPERE', language : 'c')
