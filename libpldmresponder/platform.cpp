@@ -15,6 +15,8 @@
 #include "pldmd/handler.hpp"
 #include "requester/handler.hpp"
 
+#include <config.h>
+#include <filesystem>
 #include <libpldm/entity.h>
 #include <libpldm/state_set.h>
 
@@ -435,6 +437,24 @@ int Handler::sensorEvent(const pldm_msg* request, size_t payloadLength,
             return PLDM_ERROR;
         }
 
+#ifdef AMPERE
+        std::string ampere_scripts = AMPERE_PLDM_EVENT_HANDLER;
+        if (std::filesystem::exists(ampere_scripts))
+        {
+            ampere_scripts += " " + std::to_string(PLDM_SENSOR_EVENT);
+            ampere_scripts += " " + std::to_string(eventClass);
+            ampere_scripts += " " + std::to_string(tid);
+            ampere_scripts += " " + std::to_string(sensorId);
+            ampere_scripts += " " + std::to_string(sensorOffset);
+            ampere_scripts += " " + std::to_string(eventState);
+            ampere_scripts += " " + std::to_string(previousEventState);
+            if (system(ampere_scripts.c_str()))
+            {
+                error("Failed to call ampere_scripts.");
+            }
+        }
+#endif
+
         // Emitting state sensor event signal
         emitStateSensorEventSignal(tid, sensorId, sensorOffset, eventState,
                                    previousEventState);
@@ -495,6 +515,27 @@ int Handler::sensorEvent(const pldm_msg* request, size_t payloadLength,
     }
     else
     {
+
+#ifdef AMPERE
+        std::string ampere_scripts = AMPERE_PLDM_EVENT_HANDLER;
+        if (std::filesystem::exists(ampere_scripts))
+        {
+            ampere_scripts += " " + std::to_string(PLDM_SENSOR_EVENT);
+            ampere_scripts += " " + std::to_string(eventClass);
+            ampere_scripts += " " + std::to_string(tid);
+            ampere_scripts += " " + std::to_string(sensorId);
+            for (uint8_t i = 0; i < eventClassDataSize; i++)
+            {
+                ampere_scripts += " " + std::to_string(*eventClassData);
+                eventClassData = eventClassData + 1;
+            }
+            if (system(ampere_scripts.c_str()))
+            {
+                error("Failed to call ampere_scripts.");
+            }
+        }
+#endif
+
         return PLDM_ERROR_INVALID_DATA;
     }
 
@@ -521,6 +562,22 @@ int Handler::pldmMsgPollEvent(const pldm_msg* request, size_t payloadLength,
     {
         return rc;
     }
+
+#ifdef AMPERE
+        std::string ampere_scripts = AMPERE_PLDM_EVENT_HANDLER;
+        if (std::filesystem::exists(ampere_scripts))
+        {
+            ampere_scripts += " " + std::to_string(PLDM_MESSAGE_POLL_EVENT);
+            ampere_scripts += " " + std::to_string(tid);
+            ampere_scripts += " " + std::to_string(evtFormatVersion);
+            ampere_scripts += " " + std::to_string(evtID);
+            ampere_scripts += " " + std::to_string(evtDataTransferHandle);
+            if (system(ampere_scripts.c_str()))
+            {
+                error("Failed to call ampere_scripts.");
+            }
+        }
+#endif
 
     return emitPldmMessagePollEventSignal(tid, PLDM_MESSAGE_POLL_EVENT,
                                           evtFormatVersion, evtID,

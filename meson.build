@@ -14,7 +14,6 @@ project('pldm', ['c', 'cpp'],
 # project uses the same compiler, we can safely ignmore these info notes.
 add_project_arguments('-Wno-psabi', language: 'cpp')
 
-
 # Disable FORTIFY_SOURCE when compiling with no optimization
 if(get_option('optimization') == '0')
   add_project_arguments('-U_FORTIFY_SOURCE',language:['cpp','c'])
@@ -60,6 +59,10 @@ if get_option('oem-ibm').allowed()
   conf_data.set('DMA_MAXSIZE', get_option('oem-ibm-dma-maxsize'))
   add_project_arguments('-DOEM_IBM', language : ['c', 'cpp'])
 endif
+if get_option('ampere').allowed()
+  add_project_arguments('-DAMPERE', language : 'c')
+  add_project_arguments('-DAMPERE', language : 'cpp')
+endif
 conf_data.set('NUMBER_OF_REQUEST_RETRIES', get_option('number-of-request-retries'))
 conf_data.set('INSTANCE_ID_EXPIRATION_INTERVAL',get_option('instance-id-expiration-interval'))
 conf_data.set('RESPONSE_TIME_OUT',get_option('response-time-out'))
@@ -70,6 +73,7 @@ conf_data.set('POLL_SENSOR_TIMER_INTERVAL', get_option('poll-sensor-timer-interv
 conf_data.set('NORMAL_RAS_EVENT_TIMER',get_option('normal-ras-event-timer'))
 conf_data.set('CRITICAL_RAS_EVENT_TIMER',get_option('critical-ras-event-timer'))
 conf_data.set('POLL_REQ_EVENT_TIMER',get_option('poll-req-event-timer'))
+conf_data.set_quoted('AMPERE_PLDM_EVENT_HANDLER', get_option('ampere-pldm-event-handler-app'))
 conf_data.set('MAXIMUM_TRANSFER_SIZE', get_option('maximum-transfer-size'))
 conf_data.set_quoted('EID_TO_NAME_JSON', join_paths(package_datadir, 'eid_to_name.json'))
 if get_option('transport-implementation') == 'mctp-demux'

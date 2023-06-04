@@ -231,3 +231,18 @@ option(
     description: '''The amount of time a BMC send each part in multipart
                     pollForEventMessage in milliseconds'''
     )
+
+option(
+    'ampere',
+    type: 'feature',
+    description: 'Enable AMPERE PLDM'
+)
+
+option(
+    'ampere-pldm-event-handler-app',
+    type : 'string',
+    value : '/usr/sbin/ampere_pldm_event_handler.sh',
+    description: '''Ampere PLDM event handler application to handl PLDM
+                    sensor/platformMessagePoll event'''
+)
+
