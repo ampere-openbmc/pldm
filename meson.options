@@ -224,3 +224,12 @@ option(
     type: 'feature',
     description: 'Enable AMPERE PLDM'
 )
+
+### Ampere script decode the PLDM events
+option(
+    'ampere-pldm-event-handler-app',
+    type : 'string',
+    value : '/usr/sbin/ampere_pldm_event_handler.sh',
+    description: '''Ampere PLDM event handler application to handl PLDM
+                    sensor/platformMessagePoll event'''
+)
