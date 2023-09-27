@@ -2004,9 +2004,25 @@ void TerminusHandler::addEventMsg(uint8_t tid, uint8_t eventId,
 {
     if (tid != devInfo.tid)
         return;
-
+#ifdef AMPERE
+    if (eventId == 200)
+    {
+        stopSensorsPolling();
+    }
+#endif
     if (eventDataHndl)
         eventDataHndl->addEventMsg(eventId, eventType, eventClass);
+#ifdef AMPERE
+    if (eventId == 200)
+    {
+        // Stop hang dectection service
+        if (system("systemctl stop ampere-sysfw-hang-handler.service"))
+        {
+            error("Failed to call stop hand-detection service");
+        }
+
+    }
+#endif
 }
 
 } // namespace terminus

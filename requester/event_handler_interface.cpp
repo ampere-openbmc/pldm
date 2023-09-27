@@ -187,6 +187,12 @@ void EventHandlerInterface::processResponseMsg(mctp_eid_t /*eid*/,
     uint32_t retEventDataSize{};
     uint32_t retEventDataIntegrityChecksum{};
 
+    if (response == nullptr || !respMsgLen)
+    {
+        error("No response received for processResponseMsg, EID = {EID}", "EID",
+                      unsigned(eid));
+        return;
+    }
     // announce that data is received
     responseReceived = true;
     isPolling = false;
@@ -421,6 +427,17 @@ void EventHandlerInterface::addEventMsg(uint8_t eventId, uint8_t eventType,
         std::cerr << "Overflow: " << eventId << "\n";
         enqueueOverflowEvent(eventId);
     }
+#ifdef AMPERE
+    if (eventId == 200)
+    {
+        /* Stop all normal and critical polling event because Mpro PLMD will
+         * stop after send event 200 to BMC. The polling event will start again
+         * after host reboot. */
+        stopEventSignalPolling();
+        /* handle event id 200 as soon as possible */
+        criticalEventCb();
+    }
+#endif
 }
 
 } // namespace pldm
