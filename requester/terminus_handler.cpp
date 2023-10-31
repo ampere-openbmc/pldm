@@ -1792,6 +1792,16 @@ void TerminusHandler::processSensorReading(mctp_eid_t, const pldm_msg* response,
         std::cerr << "Failed to receive response for the GetSensorReading"
                   << " command of eid:sensor " << unsigned(eid) << ":"
                   << sid << std::endl;
+
+        std::unique_ptr<PldmSensor>& sensorObj =
+        _sensorObjects[*(this->sensorKey)];
+        if (sensorObj)
+        {
+            sensorObj->updateValue(std::numeric_limits<double>::quiet_NaN());
+            sensorObj->setFunctionalStatus(false);
+            /* Go to next sensor */
+            this->sensorKey++;
+        }
     }
     else
     {
