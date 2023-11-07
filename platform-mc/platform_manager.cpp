@@ -94,6 +94,10 @@ exec::task<int> PlatformManager::initTerminus()
             }
         }
 
+        /* Force to use ASYNC_KEEP_ALIVE */
+        terminus->synchronyConfigurationSupported.byte =
+            1 << PLDM_EVENT_MESSAGE_GLOBAL_ENABLE_ASYNC_KEEP_ALIVE;
+
         if (!terminus->doesSupportCommand(PLDM_PLATFORM,
                                           PLDM_SET_EVENT_RECEIVER))
         {
