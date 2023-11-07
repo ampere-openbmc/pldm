@@ -141,6 +141,14 @@ exec::task<int> PlatformManager::configEventReceiver(pldm_tid_t tid)
         }
     }
 
+    if (!terminus->doesSupportCommand(PLDM_PLATFORM,
+                                      PLDM_EVENT_MESSAGE_SUPPORTED))
+    {
+        /* Force to use ASYNC_KEEP_ALIVE */
+        terminus->synchronyConfigurationSupported.byte =
+            1 << PLDM_EVENT_MESSAGE_GLOBAL_ENABLE_ASYNC_KEEP_ALIVE;
+    }
+
     if (!terminus->doesSupportCommand(PLDM_PLATFORM, PLDM_SET_EVENT_RECEIVER))
     {
         lg2::error("Terminus {TID} does not support Event", "TID", tid);
