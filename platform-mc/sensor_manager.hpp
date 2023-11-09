@@ -79,6 +79,12 @@ class SensorManager
      */
     exec::task<int> getSensorReading(std::shared_ptr<NumericSensor> sensor);
 
+    /** @brief Sending getEffecterReading command for the effecter
+     *
+     *  @param[in] sensor - the effecter to be updated
+     */
+    exec::task<int> getEffecterReading(std::shared_ptr<NumericSensor> sensor);
+
     /** @brief check if numeric sensor is in priority name spaces
      *
      *  @param[in] sensor - the sensor to be checked

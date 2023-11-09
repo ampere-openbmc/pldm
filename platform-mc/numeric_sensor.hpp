@@ -59,6 +59,10 @@ class NumericSensor
                   std::shared_ptr<pldm_compact_numeric_sensor_pdr> pdr,
                   std::string& sensorName, std::string& associationPath);
 
+    NumericSensor(const pldm_tid_t tid, const bool effecterDisabled,
+                  std::shared_ptr<pldm_numeric_effecter_value_pdr> pdr,
+                  std::string& effecterName, std::string& associationPath);
+
     ~NumericSensor(){};
 
     /** @brief The function called by Sensor Manager to set sensor to
@@ -193,6 +197,8 @@ class NumericSensor
 
     /** @brief indicate if sensor is polled in priority */
     bool isPriority;
+
+    bool isEffecter = false;
 
   private:
     /**
