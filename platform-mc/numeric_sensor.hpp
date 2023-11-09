@@ -66,7 +66,11 @@ class NumericSensor
                   std::shared_ptr<pldm_compact_numeric_sensor_pdr> pdr,
                   std::string& sensorName, std::string& associationPath);
 
-    ~NumericSensor() {};
+    NumericSensor(const pldm_tid_t tid, const bool effecterDisabled,
+                  std::shared_ptr<pldm_numeric_effecter_value_pdr> pdr,
+                  std::string& effecterName, std::string& associationPath);
+
+    ~NumericSensor(){};
 
     /** @brief The function called by Sensor Manager to set sensor to
      * error status.
@@ -384,6 +388,9 @@ class NumericSensor
 
     /** @brief Sensor Unit */
     SensorUnit sensorUnit;
+
+    /** @brief Sensor is effecter */
+    bool isEffecter = false;
 
   private:
     /**

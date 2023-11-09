@@ -251,7 +251,14 @@ exec::task<int> SensorManager::doSensorPollingTask(pldm_tid_t tid)
             elapsed = t1 - sensor->timeStamp;
             if ((sensor->updateTime <= elapsed) || (!sensor->timeStamp))
             {
-                rc = co_await getSensorReading(sensor);
+                if (sensor->isEffecter)
+                {
+                    rc = co_await getEffecterReading(sensor);
+                }
+                else
+                {
+                    rc = co_await getSensorReading(sensor);
+                }
 
                 if ((!sensorPollTimers.contains(tid)) ||
                     (sensorPollTimers[tid] &&
@@ -397,6 +404,117 @@ exec::task<int> SensorManager::getSensorReading(
             value = static_cast<double>(presentReading.value_u32);
             break;
         case PLDM_SENSOR_DATA_SIZE_SINT32:
+            value = static_cast<double>(presentReading.value_s32);
+            break;
+        default:
+            value = std::numeric_limits<double>::quiet_NaN();
+            break;
+    }
+
+    sensor->updateReading(true, true, value);
+    co_return completionCode;
+}
+
+exec::task<int>
+    SensorManager::getEffecterReading(std::shared_ptr<NumericSensor> sensor)
+{
+    auto tid = sensor->tid;
+    auto effecterId = sensor->sensorId;
+    Request request(sizeof(pldm_msg_hdr) +
+                    PLDM_GET_NUMERIC_EFFECTER_VALUE_REQ_BYTES);
+    auto requestMsg = reinterpret_cast<pldm_msg*>(request.data());
+    auto rc = encode_get_numeric_effecter_value_req(0, effecterId, requestMsg);
+    if (rc)
+    {
+        lg2::error(
+            "Failed to encode request GetEffecterReading for terminus ID {TID}, effecter Id {ID}, error {RC}.",
+            "TID", tid, "ID", effecterId, "RC", rc);
+        co_return rc;
+    }
+
+    if (!getAvailableState(tid))
+    {
+        lg2::info("Terminus ID {TID} is not available for PLDM request from {NOW}.",
+                  "TID", tid, "NOW", pldm::utils::getCurrentSystemTime());
+        co_await stdexec::just_stopped();
+    }
+
+    const pldm_msg* responseMsg = nullptr;
+    size_t responseLen = 0;
+    rc = co_await terminusManager.sendRecvPldmMsg(tid, request, &responseMsg,
+                                                  &responseLen);
+    if (rc)
+    {
+        lg2::error(
+            "Failed to send GetEffecterReading message for terminus {TID}, effecter ID {ID}, error {RC}",
+            "TID", tid, "ID", effecterId, "RC", rc);
+        co_return rc;
+    }
+
+    if ((!sensorPollTimers.contains(tid)) ||
+        (sensorPollTimers[tid] && !sensorPollTimers[tid]->isRunning()))
+    {
+        co_return PLDM_ERROR;
+    }
+
+    uint8_t completionCode = PLDM_SUCCESS;
+    uint8_t sensorDataSize = PLDM_EFFECTER_DATA_SIZE_SINT32;
+    uint8_t sensorOperationalState = 0;
+    union_range_field_format pendingValue;
+    union_sensor_data_size presentReading;
+    rc = decode_get_numeric_effecter_value_resp(
+        responseMsg, responseLen, &completionCode, &sensorDataSize,
+        &sensorOperationalState, reinterpret_cast<uint8_t*>(&pendingValue),
+        reinterpret_cast<uint8_t*>(&presentReading));
+    if (rc)
+    {
+        lg2::error(
+            "Failed to decode response GetEffecterReading for terminus ID {TID}, effecter Id {ID}, error {RC}.",
+            "TID", tid, "ID", effecterId, "RC", rc);
+        sensor->handleErrGetSensorReading();
+        co_return rc;
+    }
+
+    if (completionCode != PLDM_SUCCESS)
+    {
+        lg2::error(
+            "Error : GetEffecterReading for terminus ID {TID}, effecter Id {ID}, complete code {CC}.",
+            "TID", tid, "ID", effecterId, "CC", completionCode);
+        co_return completionCode;
+    }
+
+    double value = std::numeric_limits<double>::quiet_NaN();
+    switch (sensorOperationalState)
+    {
+        case EFFECTER_OPER_STATE_ENABLED_UPDATEPENDING:
+        case EFFECTER_OPER_STATE_ENABLED_NOUPDATEPENDING:
+            break;
+        case EFFECTER_OPER_STATE_UNAVAILABLE:
+            sensor->updateReading(false, false, value);
+            co_return completionCode;
+        default:
+            sensor->updateReading(true, false, value);
+            co_return completionCode;
+    }
+
+    switch (sensorDataSize)
+    {
+        case PLDM_EFFECTER_DATA_SIZE_UINT8:
+            value = static_cast<double>(presentReading.value_u8);
+            break;
+        case PLDM_EFFECTER_DATA_SIZE_SINT8:
+            value = static_cast<double>(presentReading.value_s8);
+            break;
+        case PLDM_EFFECTER_DATA_SIZE_UINT16:
+            value = static_cast<double>(presentReading.value_u16);
+            break;
+        case PLDM_EFFECTER_DATA_SIZE_SINT16:
+            value = static_cast<double>(presentReading.value_s16);
+            break;
+        case PLDM_EFFECTER_DATA_SIZE_UINT32:
+            value = static_cast<double>(presentReading.value_u32);
+            break;
+        case PLDM_EFFECTER_DATA_SIZE_SINT32:
             value = static_cast<double>(presentReading.value_s32);
             break;
         default:
