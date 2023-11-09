@@ -96,6 +96,12 @@ class SensorManager
      */
     exec::task<int> getSensorReading(std::shared_ptr<NumericSensor> sensor);
 
+    /** @brief Sending getEffecterReading command for the effecter
+     *
+     *  @param[in] sensor - the effecter to be updated
+     */
+    exec::task<int> getEffecterReading(std::shared_ptr<NumericSensor> sensor);
+
     /** @brief Reference to to PLDM daemon's main event loop.
      */
     sdeventplus::Event& event;
