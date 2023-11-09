@@ -275,6 +275,21 @@ class Terminus
      */
     bool createInventoryPath(std::string tName);
 
+    /** @brief Contruct the Numeric effecter class for the numeric effecter PDR.
+     *
+     *  @param[in] pdr - the compact numeric sensor PDR info
+     */
+    std::shared_ptr<pldm_numeric_effecter_value_pdr>
+        parseNumericEffecterPDR(const std::vector<uint8_t>& Pdr);
+
+    /** @brief Contruct the NumericSensor sensor class for the numeric PLDM
+     *         effecter.
+     *
+     *  @param[in] pdr - the compact numeric sensor PDR info
+     */
+    void addNumericEffecter(
+        const std::shared_ptr<pldm_numeric_effecter_value_pdr> pdr);
+
     /* @brief The terminus's TID */
     pldm_tid_t tid;
 

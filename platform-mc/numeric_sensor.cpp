@@ -1036,5 +1036,172 @@ int NumericSensor::triggerThresholdEvent(
 
     return PLDM_SUCCESS;
 }
+
+NumericSensor::NumericSensor(
+    const pldm_tid_t tid, const bool effecterDisabled,
+    std::shared_ptr<pldm_numeric_effecter_value_pdr> pdr,
+    std::string& effecterName, [[maybe_unused]] std::string& associationPath) :
+    tid(tid),
+    sensorId(pdr->effecter_id), sensorName(effecterName), isEffecter(true)
+{
+    std::string path;
+    SensorUnit sensorUnit = SensorUnit::DegreesC;
+    useMetricInterface = false;
+
+    switch (pdr->base_unit)
+    {
+        case PLDM_SENSOR_UNIT_DEGRESS_C:
+            sensorNameSpace = "/xyz/openbmc_project/effecters/temperature/";
+            sensorUnit = SensorUnit::DegreesC;
+            break;
+        case PLDM_SENSOR_UNIT_VOLTS:
+            sensorNameSpace = "/xyz/openbmc_project/effecters/voltage/";
+            sensorUnit = SensorUnit::Volts;
+            break;
+        case PLDM_SENSOR_UNIT_AMPS:
+            sensorNameSpace = "/xyz/openbmc_project/effecters/current/";
+            sensorUnit = SensorUnit::Amperes;
+            break;
+        case PLDM_SENSOR_UNIT_COUNTS:
+        case PLDM_SENSOR_UNIT_CORRECTED_ERRORS:
+        case PLDM_SENSOR_UNIT_UNCORRECTABLE_ERRORS:
+            sensorNameSpace = "/xyz/openbmc_project/effecters/count/";
+            sensorUnit = SensorUnit::RPMS;
+            break;
+        case PLDM_SENSOR_UNIT_OEMUNIT:
+            sensorNameSpace = "/xyz/openbmc_project/effecters/oem/";
+            sensorUnit = SensorUnit::RPMS;
+            break;
+        case PLDM_SENSOR_UNIT_RPM:
+            sensorNameSpace = "/xyz/openbmc_project/effecters/fan_pwm/";
+            sensorUnit = SensorUnit::RPMS;
+            break;
+        case PLDM_SENSOR_UNIT_WATTS:
+            sensorNameSpace = "/xyz/openbmc_project/effecters/power/";
+            sensorUnit = SensorUnit::Watts;
+            break;
+        case PLDM_SENSOR_UNIT_JOULES:
+            sensorNameSpace = "/xyz/openbmc_project/effecters/energy/";
+            sensorUnit = SensorUnit::Joules;
+            break;
+        case PLDM_SENSOR_UNIT_PERCENTAGE:
+            sensorNameSpace = "/xyz/openbmc_project/effecters/utilization/";
+            sensorUnit = SensorUnit::Percent;
+            break;
+        default:
+            lg2::error("Effecter {NAME} has Invalid baseUnit {UNIT}.", "NAME",
+                       sensorName, "UNIT", pdr->base_unit);
+            throw sdbusplus::xyz::openbmc_project::Common::Error::
+                InvalidArgument();
+            break;
+    }
+
+    auto& bus = pldm::utils::DBusHandler::getBus();
+    path = sensorNameSpace + sensorName;
+
+    try
+    {
+        std::string tmp{};
+        std::string interface = SENSOR_VALUE_INTF;
+        if (useMetricInterface)
+        {
+            interface = METRIC_VALUE_INTF;
+        }
+        tmp = pldm::utils::DBusHandler().getService(path.c_str(),
+                                                    interface.c_str());
+
+        if (!tmp.empty())
+        {
+            throw sdbusplus::xyz::openbmc_project::Common::Error::
+                TooManyResources();
+        }
+    }
+    catch (const std::exception&)
+    {
+        /* The sensor object path is not created */
+    }
+
+    double maxValue = std::numeric_limits<double>::quiet_NaN();
+    double minValue = std::numeric_limits<double>::quiet_NaN();
+
+    switch (pdr->effecter_data_size)
+    {
+        case PLDM_SENSOR_DATA_SIZE_UINT8:
+            maxValue = pdr->max_settable.value_u8;
+            minValue = pdr->min_settable.value_u8;
+            break;
+        case PLDM_SENSOR_DATA_SIZE_SINT8:
+            maxValue = pdr->max_settable.value_s8;
+            minValue = pdr->min_settable.value_s8;
+            break;
+        case PLDM_SENSOR_DATA_SIZE_UINT16:
+            maxValue = pdr->max_settable.value_u16;
+            minValue = pdr->min_settable.value_u16;
+            break;
+        case PLDM_SENSOR_DATA_SIZE_SINT16:
+            maxValue = pdr->max_settable.value_s16;
+            minValue = pdr->min_settable.value_s16;
+            break;
+        case PLDM_SENSOR_DATA_SIZE_UINT32:
+            maxValue = pdr->max_settable.value_u32;
+            minValue = pdr->min_settable.value_u32;
+            break;
+        case PLDM_SENSOR_DATA_SIZE_SINT32:
+            maxValue = pdr->max_settable.value_s32;
+            minValue = pdr->min_settable.value_s32;
+            break;
+    }
+
+    resolution = pdr->resolution;
+    offset = pdr->offset;
+    baseUnitModifier = pdr->unit_modifier;
+
+    timeStamp = 0;
+    updateTime = static_cast<uint64_t>(DEFAULT_SENSOR_UPDATER_INTERVAL * 1000);
+    try
+    {
+        valueIntf = std::make_unique<ValueIntf>(bus, path.c_str());
+    }
+    catch (const sdbusplus::exception_t& e)
+    {
+        lg2::error(
+            "Failed to create Value interface for effecter {PATH} error - {ERROR}",
+            "PATH", path, "ERROR", e);
+        throw sdbusplus::xyz::openbmc_project::Common::Error::InvalidArgument();
+    }
+
+    valueIntf->maxValue(unitModifier(conversionFormula(maxValue)));
+    valueIntf->minValue(unitModifier(conversionFormula(minValue)));
+    valueIntf->unit(sensorUnit);
+
+    try
+    {
+        availabilityIntf = std::make_unique<AvailabilityIntf>(bus,
+                                                              path.c_str());
+    }
+    catch (const sdbusplus::exception_t& e)
+    {
+        lg2::error(
+            "Failed to create Availability interface for effecter {PATH} error - {ERROR}",
+            "PATH", path, "ERROR", e);
+        throw sdbusplus::xyz::openbmc_project::Common::Error::InvalidArgument();
+    }
+    availabilityIntf->available(true);
+
+    try
+    {
+        operationalStatusIntf =
+            std::make_unique<OperationalStatusIntf>(bus, path.c_str());
+    }
+    catch (const sdbusplus::exception_t& e)
+    {
+        lg2::error(
+            "Failed to create Operational Status interface for effecter {PATH} error - {ERROR}",
+            "PATH", path, "ERROR", e);
+        throw sdbusplus::xyz::openbmc_project::Common::Error::InvalidArgument();
+    }
+    operationalStatusIntf->functional(!effecterDisabled);
+}
+
 } // namespace platform_mc
 } // namespace pldm
