@@ -146,8 +146,12 @@ class Handler
         auto eid = key.eid;
         if (this->handlers.contains(key))
         {
-            error("The eid:InstanceID {EID}:{IID} is using.", "EID",
-                  (unsigned)key.eid, "IID", (unsigned)key.instanceId);
+            error("The command with "\
+                  "eid:InstanceID:CmdType:CmdId {EID}:{IID}:{CMDTYPE}:{CMDID}"\
+                  " is expiried.", "EID",
+                  (unsigned)key.eid, "IID", (unsigned)key.instanceId,
+                  "CMDTYPE", (unsigned)key.type,
+                  "CMDID", (unsigned)key.command);
             auto& [request, responseHandler,
                    timerInstance] = this->handlers[key];
             request->stop();
