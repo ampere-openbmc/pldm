@@ -264,7 +264,8 @@ class TerminusHandler
     requester::Coroutine processDevPDRs(mctp_eid_t& eid,
                                         const pldm_msg* response,
                                         size_t& respMsgLen,
-                                        uint32_t* nextRecordHandle);
+                                        uint32_t* nextRecordHandle,
+                                        uint32_t recordHandle);
 
     /** @brief Parse comback numeric sensor PDRs and create the sensor D-Bus
      *  objects

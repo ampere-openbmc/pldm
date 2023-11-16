@@ -985,7 +985,7 @@ requester::Coroutine TerminusHandler::getDevPDR(uint32_t nextRecordHandle)
             co_return rc;
         }
         rc = co_await processDevPDRs(eid, response, respMsgLen,
-                                     &nextRecordHandle);
+                                     &nextRecordHandle, recordHandle);
         if (rc)
         {
             std::cerr << "Failed to send processDevPDRs, EID=" << unsigned(eid)
@@ -1006,7 +1006,8 @@ requester::Coroutine TerminusHandler::getDevPDR(uint32_t nextRecordHandle)
 requester::Coroutine TerminusHandler::processDevPDRs(mctp_eid_t& /*eid*/,
                                                      const pldm_msg* response,
                                                      size_t& respMsgLen,
-                                                     uint32_t* nextRecordHandle)
+                                                     uint32_t* nextRecordHandle,
+                                                     uint32_t recordHandle)
 {
     uint8_t tlEid = 0;
     bool tlValid = true;
@@ -1052,6 +1053,18 @@ requester::Coroutine TerminusHandler::processDevPDRs(mctp_eid_t& /*eid*/,
                   << ", cc=" << unsigned(completionCode) << std::endl;
         co_return rc;
     }
+
+    /*
+     * Temporary: If PDR is multi-part PDR just get the first part then go to
+     * next PDRs
+     * Todo: Support multi-part in getting PDRs.
+     */
+    if ((*nextRecordHandle) && (transferFlag != PLDM_END) &&
+        (transferFlag != PLDM_START_AND_END))
+    {
+        *nextRecordHandle = recordHandle + 1;
+    }
+
     // when nextRecordHandle is 0, we need the recordHandle of the last
     // PDR and not 0-1.
     if (!(*nextRecordHandle))
