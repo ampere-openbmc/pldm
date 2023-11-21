@@ -43,7 +43,20 @@ exec::task<int> Manager::reconfigEventReceiver(pldm_tid_t tid)
 
     lg2::info("Successfully reconfigure event receiver for terminus {TID}.",
               "TID", tid);
+    co_return PLDM_SUCCESS;
+}
 
+exec::task<int> Manager::pollForPlatformEvent(
+    pldm_tid_t tid, uint16_t pollEventId, uint32_t pollDataTransferHandle)
+{
+    auto it = termini.find(tid);
+    if (it != termini.end())
+    {
+        auto& terminus = it->second;
+        co_await eventManager.pollForPlatformEventTask(tid, pollEventId,
+                                                       pollDataTransferHandle);
+        terminus->pollEvent = false;
+    }
     co_return PLDM_SUCCESS;
 }
 
