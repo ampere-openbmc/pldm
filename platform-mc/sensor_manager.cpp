@@ -185,7 +185,7 @@ exec::task<int> SensorManager::doSensorPollingTask(pldm_tid_t tid)
 
         if (manager && terminus->pollEvent)
         {
-            co_await manager->pollForPlatformEvent(tid);
+            co_await manager->pollForPlatformEvent(tid, terminus->pollEventId);
         }
 
         sd_event_now(event.get(), CLOCK_MONOTONIC, &t1);

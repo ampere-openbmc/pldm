@@ -543,5 +543,5 @@ TEST_F(EventManagerTest, pollForPlatformEventTaskMultipartTransferTest)
 
     // start task to poll event from terminus
     // should finish immediately
-    stdexec::sync_wait(eventManager.pollForPlatformEventTask(tid));
+    stdexec::sync_wait(eventManager.pollForPlatformEventTask(tid, 0));
 }

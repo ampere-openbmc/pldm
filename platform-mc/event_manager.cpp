@@ -1,5 +1,6 @@
 #include "event_manager.hpp"
 
+#include "libpldm/platform.h"
 #include "libpldm/utils.h"
 
 #include "terminus_manager.hpp"
@@ -119,9 +120,21 @@ int EventManager::handlePlatformEvent(pldm_tid_t tid, uint8_t eventClass,
     else if (eventClass == PLDM_MESSAGE_POLL_EVENT)
     {
         lg2::info("received poll event for terminus {TID}", "TID", tid);
+        struct pldm_message_poll_event poll_event = {};
+        auto rc = decode_pldm_message_poll_event_data(eventData, eventDataSize,
+                                                      &poll_event);
+        if (rc)
+        {
+            lg2::error(
+                "Failed to decode PldmMessagePollEvent event, error {RC} ",
+                "RC", rc);
+            return rc;
+        }
+
         if (termini.contains(tid))
         {
             termini[tid]->pollEvent = true;
+            termini[tid]->pollEventId = poll_event.event_id;
         }
         return PLDM_SUCCESS;
     }
@@ -135,12 +148,13 @@ int EventManager::handlePlatformEvent(pldm_tid_t tid, uint8_t eventClass,
     return PLDM_ERROR;
 }
 
-exec::task<int> EventManager::pollForPlatformEventTask(pldm_tid_t tid)
+exec::task<int> EventManager::pollForPlatformEventTask(pldm_tid_t tid,
+                                                       uint16_t pollEventId)
 {
     uint8_t rc = 0;
     uint8_t transferOperationFlag = PLDM_GET_FIRSTPART;
-    uint32_t dataTransferHandle = 0;
-    uint32_t eventIdToAcknowledge = 0;
+    uint32_t dataTransferHandle = pollEventId;
+    uint32_t eventIdToAcknowledge = pollEventId;
 
     uint8_t completionCode;
     uint8_t eventTid;
