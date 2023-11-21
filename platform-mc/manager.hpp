@@ -170,10 +170,11 @@ class Manager : public pldm::MctpDiscoveryHandlerIntf
      *
      *  @param[in] tid - Terminus ID
      *  @param[in] eventDataOffset - Event data offset
+     *  @param[in] eventId - Event Id
      *
      *  @return coroutine return_value - PLDM completion code
      */
-    exec::task<int> pollForPlatformEvent(pldm_tid_t tid);
+    exec::task<int> pollForPlatformEvent(pldm_tid_t tid, uint16_t eventId);
 
   private:
     /** @brief List of discovered termini */

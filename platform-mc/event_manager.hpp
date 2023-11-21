@@ -78,7 +78,8 @@ class EventManager
      *  @param[in] tid - the destination TID
      *  @return coroutine return_value - PLDM completion code
      */
-    exec::task<int> pollForPlatformEventTask(pldm_tid_t tid);
+    exec::task<int> pollForPlatformEventTask(pldm_tid_t tid,
+                                             uint16_t pollEventId);
 
     /** @brief set force stop flag to stop event polling but still keep the
      *         timer.

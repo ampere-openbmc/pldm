@@ -256,7 +256,7 @@ exec::task<int> SensorManager::doSensorPollingTask(pldm_tid_t tid)
 
         if (manager && terminus->pollEvent)
         {
-            co_await manager->pollForPlatformEvent(tid);
+            co_await manager->pollForPlatformEvent(tid, terminus->pollEventId);
         }
 
         // poll priority Sensors
