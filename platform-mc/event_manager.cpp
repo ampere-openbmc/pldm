@@ -234,18 +234,24 @@ exec::task<int> EventManager::pollForPlatformEventTask(pldm_tid_t tid,
             {
                 if (transferFlag == PLDM_START_AND_END)
                 {
-                    handlePlatformEvent(eventTid, eventClass,
-                                        eventMessage.data(),
-                                        eventMessage.size());
+                    if (eventHandlers.contains(eventClass))
+                    {
+                        eventHandlers.at(eventClass)(eventTid, eventId,
+                                                     eventMessage.data(),
+                                                     eventMessage.size());
+                    }
                 }
                 else if (transferFlag == PLDM_END)
                 {
                     if (eventDataIntegrityChecksum ==
                         crc32(eventMessage.data(), eventMessage.size()))
                     {
-                        handlePlatformEvent(eventTid, eventClass,
-                                            eventMessage.data(),
-                                            eventMessage.size());
+                        if (eventHandlers.contains(eventClass))
+                        {
+                            eventHandlers.at(eventClass)(eventTid, eventId,
+                                                         eventMessage.data(),
+                                                         eventMessage.size());
+                        }
                     }
                     else
                     {
@@ -727,6 +733,14 @@ std::string
             break;
     }
     return std::string{};
+}
+
+int EventManager::processMsgPollEvent([[maybe_unused]] pldm_tid_t tid,
+                                      [[maybe_unused]] uint16_t eventId,
+                                      const uint8_t* eventData,
+                                      size_t eventDataSize)
+{
+    return processCperEvent(eventData, eventDataSize);
 }
 
 } // namespace platform_mc

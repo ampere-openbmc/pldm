@@ -17,6 +17,12 @@ namespace pldm
 namespace platform_mc
 {
 
+using EventType = uint8_t;
+using HandlerFunc =
+    std::function<int(pldm_tid_t tid, uint16_t eventId,
+                      const uint8_t* eventData, size_t eventDataSize)>;
+using EventMap = std::map<EventType, HandlerFunc>;
+
 const std::string SensorThresholdCriticalHighGoingHigh{
     "OpenBMC.0.2.SensorThresholdCriticalHighGoingHigh"};
 const std::string SensorThresholdCriticalHighGoingLow{
@@ -56,7 +62,22 @@ class EventManager
         TerminusManager& terminusManager,
         std::map<mctp_eid_t, std::shared_ptr<Terminus>>& termini) :
         terminusManager(terminusManager),
-        termini(termini){};
+        termini(termini)
+    {
+        // Default response handler for PollForPlatFormEventMessage
+        registerHandler(PLDM_MESSAGE_POLL_EVENT,
+                        [this](pldm_tid_t tid, uint16_t eventId,
+                               const uint8_t* eventData, size_t eventDataSize) {
+            return this->processMsgPollEvent(tid, eventId, eventData,
+                                             eventDataSize);
+        });
+        registerHandler(PLDM_OEM_EVENT_CLASS_0xFA,
+                        [this](pldm_tid_t tid, uint16_t eventId,
+                               const uint8_t* eventData, size_t eventDataSize) {
+            return this->processMsgPollEvent(tid, eventId, eventData,
+                                             eventDataSize);
+        });
+    };
 
     /** @brief Handle platform event
      *
@@ -91,6 +112,26 @@ class EventManager
             forceStopEventPoll[tid] = true;
         }
     };
+
+    /** @brief Register response handler for PollForPlatFormEventMessage
+     */
+    void registerHandler(uint8_t eventClass, HandlerFunc function)
+    {
+        auto it = eventHandlers.find(eventClass);
+        if (it != eventHandlers.end())
+        {
+            it->second = function;
+        }
+        else
+        {
+            eventHandlers.emplace(eventClass, function);
+        }
+    }
+
+    /** @brief Default response handler for PollForPlatFormEventMessage
+     */
+    int processMsgPollEvent(pldm_tid_t tid, uint16_t eventId,
+                            const uint8_t* eventData, size_t eventDataSize);
 
   protected:
     /** @brief Send pollForPlatformEventMessage and return response
@@ -142,6 +183,9 @@ class EventManager
 
     /** @brief force stop polling sensors*/
     std::map<pldm_tid_t, bool> forceStopEventPoll;
+
+    /** @brief map of PLDM event type to EventHandlers */
+    EventMap eventHandlers;
 };
 } // namespace platform_mc
 } // namespace pldm
