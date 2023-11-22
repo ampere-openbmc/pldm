@@ -1,1 +1,5 @@
-oem_files += files('oem_event_manager.cpp',)
+oem_files += files(
+    'oem_event_manager.cpp',
+    'cper.cpp',
+    'utils.cpp',
+    )

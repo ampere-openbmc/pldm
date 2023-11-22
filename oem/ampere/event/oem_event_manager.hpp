@@ -15,6 +15,8 @@ namespace oem_ampere
 {
 using namespace pldm::pdr;
 
+#define NORMAL_EVENT_POLLING_TIME 5000000 // ms
+
 using EventToMsgMap_t = std::unordered_map<uint8_t, std::string>;
 
 enum sensor_ids
@@ -237,7 +239,9 @@ class OemEventManager
     explicit OemEventManager(
         sdeventplus::Event& event,
         requester::Handler<requester::Request>* /* handler */,
-        pldm::InstanceIdDb& /* instanceIdDb */) : event(event) {};
+        pldm::InstanceIdDb& /* instanceIdDb */, platform_mc::Manager* manager) :
+        event(event), pollingTime(NORMAL_EVENT_POLLING_TIME),
+        manager(manager) {};
 
     /** @brief Decode sensor event messages and handle correspondingly.
      *
@@ -253,7 +257,14 @@ class OemEventManager
                           uint8_t /* formatVersion */, pldm_tid_t tid,
                           size_t eventDataOffset);
 
+    exec::task<int> oemPollForPlatformEvent(pldm_tid_t tid);
+
+    int processOemMsgPollEvent(pldm_tid_t tid, uint16_t eventId,
+                               const uint8_t* eventData, size_t eventDataSize);
+
   protected:
+    void pausePolling(pldm_tid_t tid);
+
     /** @brief Create prefix string for logging message.
      *
      *  @param[in] tid - TID
@@ -394,6 +405,13 @@ class OemEventManager
      *  work
      */
     sdeventplus::Event& event;
+
+    /** @brief sensor polling interval in ms. */
+    uint64_t pollingTime;
+
+    std::map<pldm_tid_t, uint64_t> timeStamp;
+
+    platform_mc::Manager* manager;
 };
 } // namespace oem_ampere
 } // namespace pldm
