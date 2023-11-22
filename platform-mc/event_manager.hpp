@@ -15,6 +15,7 @@ namespace pldm
 namespace platform_mc
 {
 
+#define PLDM_OEM_EVENT_CLASS_0xFA 0xFA
 using EventType = uint8_t;
 using HandlerFunc =
     std::function<int(pldm_tid_t tid, uint16_t eventId,

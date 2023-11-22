@@ -189,7 +189,7 @@ exec::task<int> SensorManager::doSensorPollingTask(pldm_tid_t tid)
                 tid, terminus->pollEventId, terminus->pollDataTransferHandle);
         }
 
-        if (manager)
+        if (manager && (!terminus->pollEvent))
         {
             co_await manager->oemPollForPlatformEvent(tid);
         }

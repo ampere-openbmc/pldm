@@ -60,7 +60,7 @@ int EventManager::handlePlatformEvent(
     }
 
     /* EventClass CPEREvent as `Table 11 - PLDM Event Types` DSP0248 V1.3.0 */
-    if (eventClass == PLDM_CPER_EVENT)
+    if (eventClass == PLDM_CPER_EVENT || eventClass == PLDM_OEM_EVENT_CLASS_0xFA)
     {
         return processCperEvent(tid, eventId, eventData, eventDataSize);
     }
