@@ -186,6 +186,11 @@ class Manager : public pldm::MctpDiscoveryHandlerIntf
      */
     exec::task<int> pollForPlatformEvent(pldm_tid_t tid, uint16_t eventId);
 
+    void registerOEMHandler(uint8_t eventClass, HandlerFunc handlerFunc)
+    {
+        eventManager.registerHandler(eventClass, handlerFunc);
+    }
+
   private:
     /** @brief List of discovered termini */
     TerminiMapper termini{};
