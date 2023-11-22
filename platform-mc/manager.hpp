@@ -16,6 +16,9 @@ namespace pldm
 namespace platform_mc
 {
 
+using PollHandler = std::function<exec::task<int>(pldm_tid_t tid)>;
+using PollHandlers = std::vector<PollHandler>;
+
 /**
  * @brief Manager
  *
@@ -218,9 +221,31 @@ class Manager : public pldm::MctpDiscoveryHandlerIntf
         eventManager.registerPolledEventHandler(eventClass, handlers);
     }
 
+    /** @brief Register OEM flow to poll the PLDM Event use
+     *         PollForPlatformEventMessage command
+     *
+     *  @param[in] handler - Poll event handlerr
+     */
+    void registerOEMPollMethod(PollHandler handler)
+    {
+        pollHandlers.push_back(std::move(handler));
+    }
+
+    /** @brief OEM task to do OEM event polling
+     *
+     *  @param[in] tid - Destination TID
+     *  @return coroutine return_value - PLDM completion code
+     */
+    exec::task<int> oemPollForPlatformEvent(pldm_tid_t tid);
+
   private:
     /** @brief List of discovered termini */
     TerminiMapper termini{};
+
+    /** @brief map of PLDM event type to EventHandlers
+     *
+     */
+    PollHandlers pollHandlers;
 
     /** @brief Terminus interface for calling the hook functions */
     TerminusManager terminusManager;
