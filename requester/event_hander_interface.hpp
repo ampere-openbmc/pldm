@@ -20,6 +20,7 @@
 #include <memory>
 #include <queue>
 #include <vector>
+#include <config.h>
 
 namespace pldm
 {
@@ -75,6 +76,9 @@ class EventHandlerInterface
     sdeventplus::utility::Timer<sdeventplus::ClockId::Monotonic> critEventTimer;
     sdeventplus::utility::Timer<sdeventplus::ClockId::Monotonic> pollEventReqTimer;
 
+#ifdef AMPERE
+    bool isBertPolling = false;
+#endif
     void processResponseMsg(mctp_eid_t eid, const pldm_msg* response,
                             size_t respMsgLen);
     void resetCacheAndFlags();

@@ -172,6 +172,7 @@ void EventHandlerInterface::resetCacheAndFlags()
     recvData.totalSize = 0;
     recvData.data.clear();
     pollEventReqTimer.setEnabled(false);
+    isBertPolling = false;
 }
 
 void EventHandlerInterface::processResponseMsg(mctp_eid_t /*eid*/,
@@ -418,6 +419,30 @@ void EventHandlerInterface::stopEventSignalPolling()
 void EventHandlerInterface::addEventMsg(uint8_t eventId, uint8_t eventType,
                                         uint8_t eventClass)
 {
+#ifdef AMPERE
+    if (eventId == 200)
+    {
+        /* Check if BERT event 200 is already called */
+
+        if (isBertPolling)
+        {
+            return ;
+        }
+        /* Stop all normal and critical polling event because Mpro PLMD will
+         * stop after send event 200 to BMC. The polling event will start again
+         * after host reboot.
+         * Also clear the queue to make sure BERT event is handled asap .
+         */
+        stopEventSignalPolling();
+        critEventQueue.clear();
+        overflowEventQueue.clear();
+        critEventQueue.push_back(eventId);
+        isBertPolling = true;
+        /* handle event id 200 as soon as possible */
+        criticalEventCb();
+        return;
+    }
+#endif
     if (eventType == PLDM_MESSAGE_POLL_EVENT)
         enqueueCriticalEvent(eventId);
     if ((eventType == PLDM_SENSOR_EVENT) &&
@@ -427,17 +452,6 @@ void EventHandlerInterface::addEventMsg(uint8_t eventId, uint8_t eventType,
         std::cerr << "Overflow: " << eventId << "\n";
         enqueueOverflowEvent(eventId);
     }
-#ifdef AMPERE
-    if (eventId == 200)
-    {
-        /* Stop all normal and critical polling event because Mpro PLMD will
-         * stop after send event 200 to BMC. The polling event will start again
-         * after host reboot. */
-        stopEventSignalPolling();
-        /* handle event id 200 as soon as possible */
-        criticalEventCb();
-    }
-#endif
 }
 
 } // namespace pldm
