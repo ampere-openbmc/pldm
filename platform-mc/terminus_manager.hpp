@@ -106,7 +106,7 @@ class TerminusManager
 
     /** @brief member functions to map/unmap tid
      */
-    std::optional<MctpInfo> toMctpInfo(const pldm_tid_t& tid);
+    std::optional<MctpInfos> toMctpInfos(const pldm_tid_t& tid);
 
     /** @brief Member functions to response the TID of specific MCTP interface
      *
@@ -155,6 +155,15 @@ class TerminusManager
         return localEid;
     }
 
+    /** @brief Member functions to remove the mctpInfo from the transportLayer
+     *         and mctpInfo table of one TID
+     *
+     *  @param[in] tid - Terminus tid
+     *
+     *  @return true/false - True when tid in the table otherwise return false
+     */
+    bool unmapMctpInfo(const pldm_tid_t& tid, const MctpInfo& mctpInfo);
+
   private:
     /** @brief Find the terminus object pointer in termini list.
      *
@@ -167,6 +176,13 @@ class TerminusManager
      *  @return coroutine return_value - PLDM completion code
      */
     exec::task<int> discoverMctpTerminusTask();
+
+    /** @brief The coroutine task execute by removeMctpTerminus()
+     *
+     *  @param[in] mctpInfos - information of the MCTP endpoints
+     *  @return coroutine return_value - PLDM completion code
+     */
+    exec::task<int> removeMctpTerminusTask(const MctpInfos& mctpInfos);
 
     /** @brief Initialize terminus and then instantiate terminus object to keeps
      *         the data fetched from terminus
@@ -235,7 +251,7 @@ class TerminusManager
     std::map<pldm_tid_t, SupportedTransportLayer> transportLayerTable;
 
     /** @brief Store the supported MCTP interface info of specific TID */
-    std::map<pldm_tid_t, MctpInfo> mctpInfoTable;
+    std::map<pldm_tid_t, MctpInfos> mctpInfoTable;
 
     /** @brief A queue of MctpInfos to be discovered **/
     std::queue<MctpInfos> queuedMctpInfos{};
@@ -243,6 +259,10 @@ class TerminusManager
     /** @brief coroutine handle of discoverTerminusTask */
     std::optional<std::pair<exec::async_scope, std::optional<int>>>
         discoverMctpTerminusTaskHandle{};
+
+    /** @brief coroutine handle of removeMctpTerminusTask */
+    std::optional<std::pair<exec::async_scope, std::optional<int>>>
+        removeMctpTerminusTaskHandle{};
 
     /** @brief A Manager interface for calling the hook functions **/
     Manager* manager;
