@@ -148,6 +148,15 @@ class TerminusManager
      */
     bool unmapTid(const pldm_tid_t& tid);
 
+    /** @brief Helper function to invoke registered handlers for
+     *  updating the availability status of the MCTP endpoint
+     *
+     *  @param[in] mctpInfo - information of the target endpoint
+     *  @param[in] availability - new availability status
+     */
+    void updateMctpEndpointAvailability(const MctpInfo& mctpInfo,
+                                        Availability availability);
+
     /** @brief getter of local EID
      *
      *  @return uint8_t - local EID
@@ -260,6 +269,7 @@ class TerminusManager
 
     /** @brief Store the supported MCTP interface info of specific TID */
     std::map<pldm_tid_t, MctpInfos> mctpInfoTable;
+    std::map<MctpInfo, Availability> mctpInfoAvailTable;
 
     /** @brief A queue of MctpInfos to be discovered **/
     std::queue<MctpInfos> queuedMctpInfos{};

@@ -189,6 +189,16 @@ bool TerminusManager::unmapMctpInfo(const pldm_tid_t& tid,
     return true;
 }
 
+void TerminusManager::updateMctpEndpointAvailability(const MctpInfo& mctpInfo,
+                                                     Availability availability)
+{
+    auto mctpInfoIt = mctpInfoAvailTable.find(mctpInfo);
+    if (mctpInfoIt != mctpInfoAvailTable.end())
+    {
+        mctpInfoIt->second = availability;
+    }
+}
+
 void TerminusManager::discoverMctpTerminus(const MctpInfos& mctpInfos)
 {
     queuedMctpInfos.emplace(mctpInfos);
@@ -251,6 +261,7 @@ exec::task<int> TerminusManager::discoverMctpTerminusTask()
             auto it = findTeminusPtr(mctpInfo);
             if (it == termini.end())
             {
+                mctpInfoAvailTable[mctpInfo] = true;
                 co_await initMctpTerminus(mctpInfo);
             }
 
@@ -258,6 +269,7 @@ exec::task<int> TerminusManager::discoverMctpTerminusTask()
             auto tid = toTid(mctpInfo);
             if (!tid)
             {
+                mctpInfoAvailTable.erase(mctpInfo);
                 co_return PLDM_ERROR;
             }
             addedTids.push_back(tid.value());
@@ -292,6 +304,11 @@ void TerminusManager::removeMctpTerminus(const MctpInfos& mctpInfos)
         if (manager)
         {
             manager->stopSensorPolling(it->first);
+        }
+
+        if (mctpInfoAvailTable.contains(mctpInfo))
+        {
+            mctpInfoAvailTable.erase(mctpInfo);
         }
 
         auto terminusMctpInfos = toMctpInfos(it->first);
@@ -799,13 +816,34 @@ exec::task<int> TerminusManager::sendRecvPldmMsg(pldm_tid_t tid,
         co_return PLDM_ERROR_NOT_READY;
     }
 
-    auto mctpInfos = toMctpInfos(tid);
-    if (!mctpInfos)
+    auto mctpInfosOpt = toMctpInfos(tid);
+    if (!mctpInfosOpt)
     {
         co_return PLDM_ERROR_NOT_READY;
     }
-    /* Use latest added medium interface to send the pldm messages */
-    auto eid = std::get<0>(mctpInfos->back());
+
+    auto mctpInfos = mctpInfosOpt.value();
+
+    // Use the lastest added endpoint that is Available in the terminus
+
+    // There's a cost of maintaining another table to hold availability
+    // status as we can't ensure that it always sychronizes with the
+    // mctpInfoTable; std::map operator[] will insert a default of boolean
+    // which is false to the mctpInfoAvailTable if the mctpInfo key doesn't
+    // exist. Once we miss to initialize the availability of an available
+    // endpoint, it will drop all the messages to/from it.
+    auto mctpInfoIt = std::find_if(mctpInfos.rbegin(), mctpInfos.rend(),
+                                   [this](const auto& mctpInfo) {
+        return (!mctpInfoAvailTable.contains(mctpInfo))
+                   ? false
+                   : mctpInfoAvailTable[mctpInfo];
+    });
+
+    if (mctpInfoIt == mctpInfos.rend())
+    {
+        co_return PLDM_ERROR_NOT_READY;
+    }
+    auto eid = std::get<0>(*mctpInfoIt);
 
     auto requestMsg = reinterpret_cast<pldm_msg*>(request.data());
     requestMsg->hdr.instance_id = instanceIdDb.next(eid);

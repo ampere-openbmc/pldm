@@ -15,6 +15,9 @@ class MockManager : public pldm::MctpDiscoveryHandlerIntf
                 (override));
     MOCK_METHOD(void, handleRemovedMctpEndpoints, (const MctpInfos& mctpInfos),
                 (override));
+    MOCK_METHOD(void, updateMctpEndpointAvailability,
+                (const MctpInfos& mctpInfos, Availability availability),
+                (override));
 };
 
 } // namespace pldm
