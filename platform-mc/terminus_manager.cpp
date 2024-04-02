@@ -201,6 +201,14 @@ void TerminusManager::updateMctpEndpointAvailability(const MctpInfo& mctpInfo,
     }
 }
 
+std::string TerminusManager::constructEndpointObjPath(const MctpInfo& mctpInfo)
+{
+    std::string eidStr = std::to_string(std::get<0>(mctpInfo));
+    std::string networkIDStr = std::to_string(std::get<3>(mctpInfo));
+    return static_cast<std::string>(MCTPPath) + "/networks/" + networkIDStr +
+           "/endpoints/" + eidStr;;
+}
+
 void TerminusManager::discoverMctpTerminus(const MctpInfos& mctpInfos)
 {
     queuedMctpInfos.emplace(mctpInfos);
@@ -878,8 +886,6 @@ exec::task<int> TerminusManager::sendRecvPldmMsg(
 
     auto mctpInfos = mctpInfosOpt.value();
 
-    // Use the lastest added endpoint that is Available in the terminus
-
     // There's a cost of maintaining another table to hold availability
     // status as we can't ensure that it always sychronizes with the
     // mctpInfoTable; std::map operator[] will insert a default of boolean
@@ -903,6 +909,17 @@ exec::task<int> TerminusManager::sendRecvPldmMsg(
     requestMsg->hdr.instance_id = instanceIdDb.next(eid);
     auto rc = co_await sendRecvPldmMsgOverMctp(eid, request, responseMsg,
                                                responseLen);
+
+    if (rc == PLDM_ERROR_NOT_READY)
+    {
+        // Call Recover() to check enpoint's availability
+        // Set endpoint's availability in mctpInfoTable to false in advance
+        // to prevent message forwarding through this endpoint while mctpd
+        // is checking the endpoint.
+        std::string endpointObjPath = constructEndpointObjPath(*mctpInfoIt);
+        pldm::utils::recoverMctpEndpoint(endpointObjPath);
+        updateMctpEndpointAvailability(*mctpInfoIt, false);
+    }
 
     co_return rc;
 }
