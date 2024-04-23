@@ -41,6 +41,7 @@ conf_data.set_quoted('FRU_MASTER_JSON', join_paths(package_datadir, 'fru_master.
 conf_data.set_quoted('ENTITY_MAP_JSON', join_paths(package_datadir, 'entityMap.json'))
 conf_data.set_quoted('HOST_JSONS_DIR', join_paths(package_datadir, 'host'))
 conf_data.set_quoted('EVENTS_JSONS_DIR', join_paths(package_datadir, 'events'))
+conf_data.set_quoted('STATE_SENSOR_JSONS_DIR', join_paths(package_datadir, 'states'))
 conf_data.set('HEARTBEAT_TIMEOUT', get_option('heartbeat-timeout-seconds'))
 conf_data.set('TERMINUS_ID', get_option('terminus-id'))
 conf_data.set('TERMINUS_HANDLE',get_option('terminus-handle'))
@@ -194,6 +195,8 @@ executable(
   'platform-mc/manager.cpp',
   'platform-mc/sensor_manager.cpp',
   'platform-mc/numeric_sensor.cpp',
+  'platform-mc/state_sensor.cpp',
+  'platform-mc/state_dbus_parser.cpp',
   'platform-mc/event_manager.cpp',
   'requester/mctp_endpoint_discovery.cpp',
    oem_files,

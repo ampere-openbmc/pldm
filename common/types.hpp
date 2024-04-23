@@ -63,6 +63,7 @@ using MctpInfos = std::vector<MctpInfo>;
 #define MCTP_START_VALID_EID 8
 
 #define PLDM_PLATFORM_GETPDR_MAX_RECORD_BYTES 1024
+#define PLDM_STATE_SENSOR_MAX_COMPOSITE_SENSOR_COUNT 8
 
 namespace dbus
 {
@@ -177,6 +178,9 @@ using CompositeSensorStates = std::vector<PossibleStates>;
 using EntityInfo = std::tuple<ContainerID, EntityType, EntityInstance>;
 using SensorInfo =
     std::tuple<EntityInfo, CompositeSensorStates, std::vector<StateSetId>>;
+using PDR = std::vector<uint8_t>;
+using PDRList = std::vector<PDR>;
+using CompositeStates = std::vector<std::tuple<StateSetId, PossibleStates>>;
 
 } // namespace pdr
 

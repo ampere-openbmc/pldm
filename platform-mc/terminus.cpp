@@ -18,7 +18,7 @@ namespace platform_mc
 Terminus::Terminus(pldm_tid_t tid, uint64_t supportedTypes) :
     initialized(false), maxBufferSize(MAX_MESSAGE_BUFFER_SIZE),
     synchronyConfigurationSupported(0), pollEvent(false), tid(tid),
-    supportedTypes(supportedTypes)
+    supportedTypes(supportedTypes), stateSensorHandler(STATE_SENSOR_JSONS_DIR)
 {}
 
 bool Terminus::doesSupportType(uint8_t type)
@@ -115,6 +115,7 @@ void Terminus::parseTerminusPDRs()
 {
     std::vector<std::shared_ptr<pldm_numeric_sensor_value_pdr>>
         numericSensorPdrs{};
+    std::vector<std::shared_ptr<PDR>> stateSensorPdrs{};
     std::vector<std::shared_ptr<pldm_compact_numeric_sensor_pdr>>
         compactNumericSensorPdrs{};
     std::vector<std::shared_ptr<pldm_numeric_effecter_value_pdr>>
@@ -206,6 +207,20 @@ void Terminus::parseTerminusPDRs()
                 numericEffecterPdrs.emplace_back(std::move(parsedPdr));
                 break;
             }
+            case PLDM_STATE_SENSOR_PDR:
+            {
+                auto parsedPdr = parseStateSensorPDR(pdr);
+                if (!parsedPdr)
+                {
+                    lg2::error(
+                        "Failed to parse PDR with type {TYPE} handle {HANDLE}",
+                        "TYPE", pdrHdr->type, "HANDLE",
+                        static_cast<uint32_t>(pdrHdr->record_handle));
+                    continue;
+                }
+                stateSensorPdrs.emplace_back(std::move(parsedPdr));
+                break;
+            }
             default:
             {
                 lg2::error("Unsupported PDR with type {TYPE} handle {HANDLE}",
@@ -246,6 +261,11 @@ void Terminus::parseTerminusPDRs()
     for (auto pdr : compactNumericSensorPdrs)
     {
         addCompactNumericSensor(pdr);
+    }
+
+    for (auto stateSensorPdr : stateSensorPdrs)
+    {
+        addStateSensor(stateSensorPdr);
     }
 
     for (auto pdr : numericEffecterPdrs)
@@ -389,6 +409,70 @@ std::shared_ptr<EntityAuxiliaryNames>
                   decodedPdr->container.entity_container_id};
 
     return std::make_shared<EntityAuxiliaryNames>(key, nameStrings);
+}
+
+std::shared_ptr<PDR>
+    Terminus::parseStateSensorPDR(const std::vector<uint8_t>& pdrData)
+{
+    auto parsedPdr = std::make_shared<PDR>(pdrData);
+    return parsedPdr;
+}
+
+void Terminus::addStateSensor(const std::shared_ptr<PDR> pdr)
+{
+    std::vector<std::string> sensorNames;
+    auto pdrData = reinterpret_cast<const pldm_state_sensor_pdr*>(pdr->data());
+    SensorID sensorId = pdrData->sensor_id;
+    CompositeCount compositeCount = pdrData->composite_sensor_count;
+
+    if (terminusName == "")
+    {
+        lg2::error(
+            "Terminus ID {TID}: DOES NOT have name. Skip Adding sensors.",
+            "TID", tid);
+        return;
+    }
+
+    for ([[maybe_unused]] const auto& sensor :
+         std::views::iota(0, static_cast<int>(compositeCount)))
+    {
+        std::string sensorName = terminusName + "_" + "Sensor_" +
+                                 std::to_string(sensorId);
+        sensorNames.emplace_back(sensorName);
+    }
+
+    if (pdrData->sensor_auxiliary_names_pdr)
+    {
+        auto sensorAuxiliaryNames = getSensorAuxiliaryNames(sensorId);
+        if (sensorAuxiliaryNames)
+        {
+            const auto& [sensorId, sensorCnt, auxNames] = *sensorAuxiliaryNames;
+            for (const auto& index :
+                 std::views::iota(0, static_cast<int>(sensorCnt)))
+            {
+                for (const auto& [languageTag, name] : auxNames[index])
+                {
+                    if (languageTag == "en" && name != "")
+                    {
+                        sensorNames[index] = terminusName + "_" + name;
+                    }
+                }
+            }
+        }
+    }
+
+    try
+    {
+        auto sensor = std::make_shared<StateSensor>(
+            tid, true, pdr, sensorNames, inventoryPath, stateSensorHandler);
+        stateSensors.emplace_back(sensor);
+    }
+    catch (const std::exception& e)
+    {
+        lg2::error(
+            "Failed to create Compact State Sensor. error - {ERROR} sensorID - {ID}",
+            "ERROR", e, "ID", sensorId);
+    }
 }
 
 std::shared_ptr<pldm_numeric_sensor_value_pdr>
