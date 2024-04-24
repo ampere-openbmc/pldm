@@ -10,6 +10,7 @@
 #include <xyz/openbmc_project/Association/Definitions/server.hpp>
 #include <xyz/openbmc_project/Metric/Value/server.hpp>
 #include <xyz/openbmc_project/Inventory/Source/PLDM/Entity/server.hpp>
+#include <xyz/openbmc_project/Metric/Value/server.hpp>
 #include <xyz/openbmc_project/Sensor/Threshold/Critical/server.hpp>
 #include <xyz/openbmc_project/Sensor/Threshold/Warning/server.hpp>
 #include <xyz/openbmc_project/Sensor/Value/server.hpp>
