@@ -25,6 +25,8 @@ NumericSensor::NumericSensor(const pldm_tid_t tid, const bool sensorDisabled,
     std::string path;
     std::string invPath;
     SensorUnit sensorUnit = SensorUnit::DegreesC;
+    MetricUnit metricUnit = MetricUnit::Count;
+    useMetricInterface = false;
 
     switch (pdr->base_unit)
     {
@@ -55,6 +57,22 @@ NumericSensor::NumericSensor(const pldm_tid_t tid, const bool sensorDisabled,
         case PLDM_SENSOR_UNIT_PERCENTAGE:
             sensorNameSpace = "/xyz/openbmc_project/sensors/utilization/";
             sensorUnit = SensorUnit::Percent;
+            break;
+        case PLDM_SENSOR_UNIT_COUNTS:
+            sensorNameSpace = "/xyz/openbmc_project/metric/count/";
+            useMetricInterface = true;
+            break;
+        case PLDM_SENSOR_UNIT_CORRECTED_ERRORS:
+            sensorNameSpace = "/xyz/openbmc_project/metric/count/";
+            useMetricInterface = true;
+            break;
+        case PLDM_SENSOR_UNIT_UNCORRECTABLE_ERRORS:
+            sensorNameSpace = "/xyz/openbmc_project/metric/count/";
+            useMetricInterface = true;
+            break;
+        case PLDM_SENSOR_UNIT_OEMUNIT:
+            sensorNameSpace = "/xyz/openbmc_project/metric/oem/";
+            useMetricInterface = true;
             break;
         default:
             lg2::error("Sensor {NAME} has Invalid baseUnit {UNIT}.", "NAME",
@@ -267,21 +285,44 @@ NumericSensor::NumericSensor(const pldm_tid_t tid, const bool sensorDisabled,
         updateTime = pdr->update_interval * 1000000;
     }
 
-    try
+    if (!useMetricInterface)
     {
-        valueIntf = std::make_unique<ValueIntf>(bus, path.c_str());
+        try
+        {
+            valueIntf = std::make_unique<ValueIntf>(bus, path.c_str());
+        }
+        catch (const sdbusplus::exception_t& e)
+        {
+            lg2::error(
+                "Failed to create Value interface for numeric sensor {PATH} error - {ERROR}",
+                "PATH", path, "ERROR", e);
+            throw sdbusplus::xyz::openbmc_project::Common::Error::
+                InvalidArgument();
+        }
+        valueIntf->maxValue(unitModifier(conversionFormula(maxValue)));
+        valueIntf->minValue(unitModifier(conversionFormula(minValue)));
+        valueIntf->unit(sensorUnit);
     }
-    catch (const sdbusplus::exception_t& e)
+    else
     {
-        lg2::error(
-            "Failed to create Value interface for numeric sensor {PATH} error - {ERROR}",
-            "PATH", path, "ERROR", e);
-        throw sdbusplus::xyz::openbmc_project::Common::Error::InvalidArgument();
+        try
+        {
+            metricIntf = std::make_unique<MetricIntf>(bus, path.c_str());
+        }
+        catch (const sdbusplus::exception_t& e)
+        {
+            lg2::error(
+                "Failed to create Metric interface for numeric sensor {PATH} error - {ERROR}",
+                "PATH", path, "ERROR", e);
+            throw sdbusplus::xyz::openbmc_project::Common::Error::
+                InvalidArgument();
+        }
+        metricIntf->maxValue(unitModifier(conversionFormula(maxValue)));
+        metricIntf->minValue(unitModifier(conversionFormula(minValue)));
+        metricIntf->unit(metricUnit);
     }
-    valueIntf->maxValue(unitModifier(conversionFormula(maxValue)));
-    valueIntf->minValue(unitModifier(conversionFormula(minValue)));
+
     hysteresis = unitModifier(conversionFormula(hysteresis));
-    valueIntf->unit(sensorUnit);
 
     try
     {
@@ -326,7 +367,7 @@ NumericSensor::NumericSensor(const pldm_tid_t tid, const bool sensorDisabled,
     }
     operationalStatusIntf->functional(!sensorDisabled);
 
-    if (hasWarningThresholds)
+    if (hasWarningThresholds && !useMetricInterface)
     {
         try
         {
@@ -345,7 +386,7 @@ NumericSensor::NumericSensor(const pldm_tid_t tid, const bool sensorDisabled,
         thresholdWarningIntf->warningLow(unitModifier(warningLow));
     }
 
-    if (hasCriticalThresholds)
+    if (hasCriticalThresholds && !useMetricInterface)
     {
         try
         {
@@ -375,6 +416,8 @@ NumericSensor::NumericSensor(
     std::string path;
     std::string invPath;
     SensorUnit sensorUnit = SensorUnit::DegreesC;
+    MetricUnit metricUnit = MetricUnit::Count;
+    useMetricInterface = false;
 
     switch (pdr->base_unit)
     {
@@ -405,6 +448,22 @@ NumericSensor::NumericSensor(
         case PLDM_SENSOR_UNIT_PERCENTAGE:
             sensorNameSpace = "/xyz/openbmc_project/sensors/utilization/";
             sensorUnit = SensorUnit::Percent;
+            break;
+        case PLDM_SENSOR_UNIT_COUNTS:
+            sensorNameSpace = "/xyz/openbmc_project/metric/count/";
+            useMetricInterface = true;
+            break;
+        case PLDM_SENSOR_UNIT_CORRECTED_ERRORS:
+            sensorNameSpace = "/xyz/openbmc_project/metric/count/";
+            useMetricInterface = true;
+            break;
+        case PLDM_SENSOR_UNIT_UNCORRECTABLE_ERRORS:
+            sensorNameSpace = "/xyz/openbmc_project/metric/count/";
+            useMetricInterface = true;
+            break;
+        case PLDM_SENSOR_UNIT_OEMUNIT:
+            sensorNameSpace = "/xyz/openbmc_project/metric/oem/";
+            useMetricInterface = true;
             break;
         default:
             lg2::error("Sensor {NAME} has Invalid baseUnit {UNIT}.", "NAME",
@@ -481,21 +540,45 @@ NumericSensor::NumericSensor(
 
     timeStamp = 0;
     updateTime = (uint64_t)DEFAULT_SENSOR_UPDATER_INTERVAL * 1000;
-    try
+
+    if (!useMetricInterface)
     {
-        valueIntf = std::make_unique<ValueIntf>(bus, path.c_str());
+        try
+        {
+            valueIntf = std::make_unique<ValueIntf>(bus, path.c_str());
+        }
+        catch (const sdbusplus::exception_t& e)
+        {
+            lg2::error(
+                "Failed to create Value interface for compact numeric sensor {PATH} error - {ERROR}",
+                "PATH", path, "ERROR", e);
+            throw sdbusplus::xyz::openbmc_project::Common::Error::
+                InvalidArgument();
+        }
+        valueIntf->maxValue(unitModifier(conversionFormula(maxValue)));
+        valueIntf->minValue(unitModifier(conversionFormula(minValue)));
+        valueIntf->unit(sensorUnit);
     }
-    catch (const sdbusplus::exception_t& e)
+    else
     {
-        lg2::error(
-            "Failed to create Value interface for compact numeric sensor {PATH} error - {ERROR}",
-            "PATH", path, "ERROR", e);
-        throw sdbusplus::xyz::openbmc_project::Common::Error::InvalidArgument();
+        try
+        {
+            metricIntf = std::make_unique<MetricIntf>(bus, path.c_str());
+        }
+        catch (const sdbusplus::exception_t& e)
+        {
+            lg2::error(
+                "Failed to create Metric interface for compact numeric sensor {PATH} error - {ERROR}",
+                "PATH", path, "ERROR", e);
+            throw sdbusplus::xyz::openbmc_project::Common::Error::
+                InvalidArgument();
+        }
+        metricIntf->maxValue(unitModifier(conversionFormula(maxValue)));
+        metricIntf->minValue(unitModifier(conversionFormula(minValue)));
+        metricIntf->unit(metricUnit);
     }
-    valueIntf->maxValue(unitModifier(conversionFormula(maxValue)));
-    valueIntf->minValue(unitModifier(conversionFormula(minValue)));
+
     hysteresis = unitModifier(conversionFormula(hysteresis));
-    valueIntf->unit(sensorUnit);
 
     try
     {
@@ -540,7 +623,7 @@ NumericSensor::NumericSensor(
     }
     operationalStatusIntf->functional(!sensorDisabled);
 
-    if (hasWarningThresholds)
+    if (hasWarningThresholds && !useMetricInterface)
     {
         try
         {
@@ -559,7 +642,7 @@ NumericSensor::NumericSensor(
         thresholdWarningIntf->warningLow(unitModifier(warningLow));
     }
 
-    if (hasCriticalThresholds)
+    if (hasCriticalThresholds && !useMetricInterface)
     {
         try
         {
@@ -596,22 +679,45 @@ void NumericSensor::updateReading(bool available, bool functional, double value)
 {
     availabilityIntf->available(available);
     operationalStatusIntf->functional(functional);
-    double curValue = valueIntf->value();
+    double curValue = 0;
+    if (!useMetricInterface)
+    {
+        curValue = valueIntf->value();
+    }
+    else
+    {
+        curValue = metricIntf->value();
+    }
+
     double newValue = std::numeric_limits<double>::quiet_NaN();
     if (functional && available)
     {
         newValue = unitModifier(conversionFormula(value));
         if (curValue != newValue)
         {
-            valueIntf->value(unitModifier(conversionFormula(value)));
-            updateThresholds();
+            if (!useMetricInterface)
+            {
+                valueIntf->value(unitModifier(conversionFormula(value)));
+                updateThresholds();
+            }
+            else
+            {
+                metricIntf->value(unitModifier(conversionFormula(value)));
+            }
         }
     }
     else
     {
         if (curValue != newValue)
         {
-            valueIntf->value(std::numeric_limits<double>::quiet_NaN());
+            if (!useMetricInterface)
+            {
+                valueIntf->value(std::numeric_limits<double>::quiet_NaN());
+            }
+            else
+            {
+                metricIntf->value(std::numeric_limits<double>::quiet_NaN());
+            }
         }
     }
 }
@@ -619,7 +725,14 @@ void NumericSensor::updateReading(bool available, bool functional, double value)
 void NumericSensor::handleErrGetSensorReading()
 {
     operationalStatusIntf->functional(false);
-    valueIntf->value(std::numeric_limits<double>::quiet_NaN());
+    if (!useMetricInterface)
+    {
+        valueIntf->value(std::numeric_limits<double>::quiet_NaN());
+    }
+    else
+    {
+        metricIntf->value(std::numeric_limits<double>::quiet_NaN());
+    }
 }
 
 bool NumericSensor::checkThreshold(bool alarm, bool direction, double value,
@@ -652,8 +765,15 @@ bool NumericSensor::checkThreshold(bool alarm, bool direction, double value,
 
 void NumericSensor::updateThresholds()
 {
-    auto value = valueIntf->value();
-
+    double value = std::numeric_limits<double>::quiet_NaN();
+    if (!useMetricInterface)
+    {
+        valueIntf->value();
+    }
+    else
+    {
+        metricIntf->value();
+    }
     if (thresholdWarningIntf &&
         !std::isnan(thresholdWarningIntf->warningHigh()))
     {
