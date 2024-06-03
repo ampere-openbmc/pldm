@@ -206,7 +206,8 @@ std::string TerminusManager::constructEndpointObjPath(const MctpInfo& mctpInfo)
     std::string path;
     std::string eidStr = std::to_string(std::get<0>(mctpInfo));
     std::string networkIDStr = std::to_string(std::get<3>(mctpInfo));
-    path = "/xyz/openbmc_project/mctp/" + networkIDStr + "/" + eidStr;
+    path = "/au/com/codeconstruct/mctp1/networks/" + networkIDStr +
+           "/endpoints/" + eidStr;
     return path;
 }
 

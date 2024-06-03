@@ -29,7 +29,7 @@ namespace utils
 
 using ObjectMapper = sdbusplus::client::xyz::openbmc_project::ObjectMapper<>;
 
-constexpr const char* MCTP_INTERFACE_CC = "au.com.CodeConstruct.MCTP.Endpoint";
+constexpr const char* MCTP_INTERFACE_CC = "au.com.codeconstruct.MCTP.Endpoint1";
 constexpr const char* MCTP_ENDPOINT_RECOVER_METHOD = "Recover";
 
 std::vector<std::vector<uint8_t>>
