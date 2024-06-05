@@ -182,6 +182,7 @@ executable(
   'pldmd/pldmd.cpp',
   'pldmd/dbus_impl_pdr.cpp',
   'fw-update/activation.cpp',
+  'pldmd/dbus_impl_fru.cpp',
   'fw-update/inventory_manager.cpp',
   'fw-update/package_parser.cpp',
   'fw-update/device_updater.cpp',
