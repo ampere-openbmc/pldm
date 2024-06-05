@@ -1,8 +1,10 @@
 #pragma once
 
+#include "libpldm/fru.h"
 #include "libpldm/platform.h"
 #include "libpldm/pldm.h"
 
+#include "pldmd/dbus_impl_fru.hpp"
 #include "terminus.hpp"
 #include "terminus_manager.hpp"
 
@@ -33,7 +35,9 @@ class PlatformManager
                              TerminiMapper& termini) :
         terminusManager(terminusManager),
         termini(termini)
-    {}
+    {
+        this->frus.clear();
+    }
 
     /** @brief Initialize terminus which supports PLDM Type 2
      *
@@ -134,11 +138,37 @@ class PlatformManager
         bitfield8_t& synchronyConfigurationSupported,
         uint8_t& numerEventClassReturned, std::vector<uint8_t>& eventClass);
 
+    /** @brief Get FRU Record Table from remote MCTP Endpoint
+     *
+     *  @param[in] tid - Destination TID
+     *  @param[in] total - Total number of record in table
+     */
+    exec::task<int> getFRURecordTable(pldm_tid_t tid, const uint16_t& total);
+
+    /** @brief Get FRU Record Table Metadata from remote MCTP Endpoint
+     *
+     *  @param[in] tid - Destination TID
+     *  @param[out] total - Total number of record in table
+     */
+    exec::task<int> getFRURecordTableMetadata(pldm_tid_t tid, uint16_t* total);
+
+    /** @brief Parse record data from FRU table
+     *
+     * @param[in] tid - Destination TID
+     *  @param[in] fruData - pointer to FRU record table
+     *  @param[in] fruLen - FRU table length
+     */
+    void parseFruRecordTable(pldm_tid_t tid, const uint8_t* fruData,
+                             size_t& fruLen);
+
     /** reference of TerminusManager for sending PLDM request to terminus*/
     TerminusManager& terminusManager;
 
     /** @brief Managed termini list */
     TerminiMapper& termini;
+
+    /** @brief Map of the object FRU */
+    std::unordered_map<uint8_t, std::shared_ptr<pldm::dbus_api::FruReq>> frus;
 };
 } // namespace platform_mc
 } // namespace pldm
