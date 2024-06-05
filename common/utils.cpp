@@ -782,5 +782,32 @@ void epochToBCDTime(uint64_t timeSec, uint8_t& seconds, uint8_t& minutes,
     year = pldm::utils::decimalToBcd(time->tm_year +
                                      1900); // The number of years since 1900
 }
+
+std::optional<std::string>
+    fruFieldValuestring(const uint8_t* value, const uint8_t& length)
+{
+    if (!value || !length)
+    {
+        lg2::error("Fru data to string invalid data.");
+        return std::nullopt;
+    }
+
+    return std::string(reinterpret_cast<const char*>(value), length);
+}
+
+std::optional<uint32_t> fruFieldParserU32(const uint8_t* value,
+                                          const uint8_t& length)
+{
+    if (!value || length != sizeof(uint32_t))
+    {
+        lg2::error("Fru data to u32 invalid data.");
+        return std::nullopt;
+    }
+
+    uint32_t ret;
+    std::memcpy(&ret, value, length);
+    return ret;
+}
+
 } // namespace utils
 } // namespace pldm
