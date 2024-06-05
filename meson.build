@@ -247,6 +247,7 @@ executable(
     'pldmd',
     'pldmd/pldmd.cpp',
     'pldmd/dbus_impl_pdr.cpp',
+    'pldmd/dbus_impl_fru.cpp',
     'fw-update/activation.cpp',
     'fw-update/inventory_manager.cpp',
     'fw-update/package_parser.cpp',

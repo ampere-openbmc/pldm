@@ -1,8 +1,10 @@
 #pragma once
 
+#include "libpldm/fru.h"
 #include "libpldm/platform.h"
 #include "libpldm/pldm.h"
 
+#include "pldmd/dbus_impl_fru.hpp"
 #include "terminus.hpp"
 #include "terminus_manager.hpp"
 
@@ -32,7 +34,8 @@ class PlatformManager
     explicit PlatformManager(TerminusManager& terminusManager,
                              TerminiMapper& termini) :
         terminusManager(terminusManager), termini(termini)
-    {}
+    {
+    }
 
     /** @brief Initialize terminus which supports PLDM Type 2
      *
@@ -137,6 +140,29 @@ class PlatformManager
         pldm_tid_t tid, uint8_t formatVersion, uint8_t& synchronyConfiguration,
         bitfield8_t& synchronyConfigurationSupported,
         uint8_t& numerEventClassReturned, std::vector<uint8_t>& eventClass);
+
+    /** @brief Get FRU Record Table from remote MCTP Endpoint
+     *
+     *  @param[in] tid - Destination TID
+     *  @param[in] total - Total number of record in table
+     */
+    exec::task<int> getFRURecordTable(pldm_tid_t tid, const uint16_t& total);
+
+    /** @brief Get FRU Record Table Metadata from remote MCTP Endpoint
+     *
+     *  @param[in] tid - Destination TID
+     *  @param[out] total - Total number of record in table
+     */
+    exec::task<int> getFRURecordTableMetadata(pldm_tid_t tid, uint16_t* total);
+
+    /** @brief Parse record data from FRU table
+     *
+     * @param[in] tid - Destination TID
+     *  @param[in] fruData - pointer to FRU record table
+     *  @param[in] fruLen - FRU table length
+     */
+    void parseFruRecordTable(pldm_tid_t tid, const uint8_t* fruData,
+                             size_t& fruLen);
 
     /** reference of TerminusManager for sending PLDM request to terminus*/
     TerminusManager& terminusManager;

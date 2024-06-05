@@ -23,6 +23,37 @@ exec::task<int> PlatformManager::initTerminus()
         }
         terminus->initialized = true;
 
+        /* Get Fru */
+        uint16_t totalTableRecords = 0;
+        if (terminus->doesSupportCommand(PLDM_FRU,
+                                         PLDM_GET_FRU_RECORD_TABLE_METADATA))
+        {
+            auto rc = co_await getFRURecordTableMetadata(tid,
+                                                         &totalTableRecords);
+            if (rc)
+            {
+                lg2::error(
+                    "Failed to get FRU Metadata for terminus {TID}, error {ERROR}",
+                    "TID", tid, "ERROR", rc);
+            }
+            if (!totalTableRecords)
+            {
+                lg2::error("Number of record table is not correct.");
+            }
+        }
+
+        if ((totalTableRecords != 0) &&
+            terminus->doesSupportCommand(PLDM_FRU, PLDM_GET_FRU_RECORD_TABLE))
+        {
+            auto rc = co_await getFRURecordTable(tid, totalTableRecords);
+            if (rc)
+            {
+                lg2::error(
+                    "Failed to get FRU Records for terminus {TID}, error {ERROR}",
+                    "TID", tid, "ERROR", rc);
+            }
+        }
+
         if (terminus->doesSupportCommand(PLDM_PLATFORM, PLDM_GET_PDR))
         {
             auto rc = co_await getPDRs(terminus);
@@ -561,5 +592,301 @@ exec::task<int> PlatformManager::eventMessageSupported(
 
     co_return completionCode;
 }
+
+static std::string fruFieldValuestring(const uint8_t* value,
+                                       const uint8_t& length)
+{
+    return std::string(reinterpret_cast<const char*>(value), length);
+}
+
+static uint32_t fruFieldParserU32(const uint8_t* value, const uint8_t& length)
+{
+    assert(length == 4);
+    uint32_t v;
+    std::memcpy(&v, value, length);
+    return v;
+}
+
+static std::string fruFieldParserTimestamp(const uint8_t*, uint8_t)
+{
+    return std::string("TODO");
+}
+
+/** @brief Check if a pointer is go through end of table
+ *  @param[in] table - pointer to FRU record table
+ *  @param[in] p - pointer to each record of FRU record table
+ *  @param[in] table_size - FRU table size
+ */
+static bool isTableEnd(const uint8_t* table, const uint8_t* p,
+                       size_t& tableSize)
+{
+    auto offset = p - table;
+    return (tableSize - offset) <= 7;
+}
+
+void PlatformManager::parseFruRecordTable(pldm_tid_t tid,
+                                          const uint8_t* fruData,
+                                          size_t& fruLen)
+{
+    std::string tidFRUObjPath;
+    std::string fruPath = "/xyz/openbmc_project/pldm/fru";
+
+    if (tid == PLDM_TID_RESERVED || !termini.contains(tid) || !termini[tid])
+    {
+        lg2::error("Invalid terminus {TID}", "TID", tid);
+        return;
+    }
+
+    auto tmp = termini[tid]->getTerminusName();
+    if (tmp && !tmp.value().empty())
+    {
+        tidFRUObjPath = fruPath + "/" + static_cast<std::string>(tmp.value());
+    }
+    else
+    {
+        lg2::error("Terminus {TID} has no name.", "TID", tid);
+        return;
+    }
+
+    auto& bus = pldm::utils::DBusHandler::getBus();
+    std::shared_ptr<pldm::dbus_api::FruReq> fruPtr;
+    try
+    {
+        fruPtr = std::make_shared<pldm::dbus_api::FruReq>(bus, tidFRUObjPath);
+        termini[tid]->setFruObject(fruPtr);
+    }
+    catch (const sdbusplus::exception_t& e)
+    {
+        lg2::error(
+            "Failed to create Fru D-Bus object for Terminus {TID} at path {PATH}",
+            "TID", tid, "PATH", tidFRUObjPath);
+        return;
+    }
+
+    auto p = fruData;
+    while (!isTableEnd(fruData, p, fruLen))
+    {
+        auto record = reinterpret_cast<const pldm_fru_record_data_format*>(p);
+
+        p += sizeof(pldm_fru_record_data_format) - sizeof(pldm_fru_record_tlv);
+
+        for (int i = 0; i < record->num_fru_fields; i++)
+        {
+            auto tlv = reinterpret_cast<const pldm_fru_record_tlv*>(p);
+            if (record->record_type == PLDM_FRU_RECORD_TYPE_GENERAL)
+            {
+                switch (tlv->type)
+                {
+                    case PLDM_FRU_FIELD_TYPE_CHASSIS:
+                        fruPtr->chassisType(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_MODEL:
+                        fruPtr->model(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_PN:
+                        fruPtr->pn(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_SN:
+                        fruPtr->sn(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_MANUFAC:
+                        fruPtr->manufacturer(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_MANUFAC_DATE:
+                        fruPtr->manufacturerDate(
+                            fruFieldParserTimestamp(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_VENDOR:
+                        fruPtr->vendor(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_NAME:
+                        fruPtr->name(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_SKU:
+                        fruPtr->sku(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_VERSION:
+                        fruPtr->version(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_ASSET_TAG:
+                        fruPtr->assetTag(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_DESC:
+                        fruPtr->description(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_EC_LVL:
+                        fruPtr->ecLevel(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_OTHER:
+                        fruPtr->other(
+                            fruFieldValuestring(tlv->value, tlv->length));
+                        break;
+                    case PLDM_FRU_FIELD_TYPE_IANA:
+                        fruPtr->iana(
+                            fruFieldParserU32(tlv->value, tlv->length));
+                        break;
+                }
+            }
+            p += sizeof(pldm_fru_record_tlv) - 1 + tlv->length;
+        }
+    }
+}
+
+exec::task<int> PlatformManager::getFRURecordTableMetadata(pldm_tid_t tid,
+                                                           uint16_t* total)
+{
+    Request request(sizeof(pldm_msg_hdr) +
+                    PLDM_GET_FRU_RECORD_TABLE_METADATA_REQ_BYTES);
+    auto requestMsg = reinterpret_cast<pldm_msg*>(request.data());
+
+    auto rc = encode_get_fru_record_table_metadata_req(
+        0, requestMsg, PLDM_GET_FRU_RECORD_TABLE_METADATA_REQ_BYTES);
+    if (rc)
+    {
+        lg2::error(
+            "Failed to encode request GetFRURecordTableMetadata for terminus ID {TID}, error {RC} ",
+            "TID", tid, "RC", rc);
+        co_return rc;
+    }
+
+    const pldm_msg* responseMsg = nullptr;
+    size_t responseLen = 0;
+
+    rc = co_await terminusManager.sendRecvPldmMsg(tid, request, &responseMsg,
+                                                  &responseLen);
+    if (rc)
+    {
+        lg2::error(
+            "Failed to send GetFRURecordTableMetadata message for terminus {TID}, error {RC}",
+            "TID", tid, "RC", rc);
+        co_return rc;
+    }
+
+    uint8_t completionCode = 0;
+    if (responseMsg == nullptr || !responseLen)
+    {
+        lg2::error(
+            "No response data for GetFRURecordTableMetadata for terminus {TID}",
+            "TID", tid);
+        co_return rc;
+    }
+
+    uint8_t fru_data_major_version, fru_data_minor_version;
+    uint32_t fru_table_maximum_size, fru_table_length;
+    uint16_t total_record_set_identifiers;
+    uint32_t checksum;
+    rc = decode_get_fru_record_table_metadata_resp(
+        responseMsg, responseLen, &completionCode, &fru_data_major_version,
+        &fru_data_minor_version, &fru_table_maximum_size, &fru_table_length,
+        &total_record_set_identifiers, total, &checksum);
+
+    if (rc)
+    {
+        lg2::error(
+            "Failed to decode response GetFRURecordTableMetadata for terminus ID {TID}, error {RC} ",
+            "TID", tid, "RC", rc);
+        co_return rc;
+    }
+
+    if (completionCode != PLDM_SUCCESS)
+    {
+        lg2::error(
+            "Error : GetFRURecordTableMetadata for terminus ID {TID}, complete code {CC}.",
+            "TID", tid, "CC", completionCode);
+        co_return rc;
+    }
+
+    co_return rc;
+}
+
+exec::task<int>
+    PlatformManager::getFRURecordTable(pldm_tid_t tid,
+                                       const uint16_t& totalTableRecords)
+{
+    if (!totalTableRecords)
+    {
+        lg2::error("Number of record table is not correct.");
+        co_return PLDM_ERROR;
+    }
+
+    Request request(sizeof(pldm_msg_hdr) + PLDM_GET_FRU_RECORD_TABLE_REQ_BYTES);
+    auto requestMsg = reinterpret_cast<pldm_msg*>(request.data());
+
+    auto rc =
+        encode_get_fru_record_table_req(0, 0, PLDM_GET_FIRSTPART, requestMsg,
+                                        PLDM_GET_FRU_RECORD_TABLE_REQ_BYTES);
+    if (rc != PLDM_SUCCESS)
+    {
+        lg2::error(
+            "Failed to encode request GetFRURecordTable for terminus ID {TID}, error {RC} ",
+            "TID", tid, "RC", rc);
+        co_return rc;
+    }
+
+    const pldm_msg* responseMsg = nullptr;
+    size_t responseLen = 0;
+
+    rc = co_await terminusManager.sendRecvPldmMsg(tid, request, &responseMsg,
+                                                  &responseLen);
+    if (rc)
+    {
+        lg2::error(
+            "Failed to send GetFRURecordTable message for terminus {TID}, error {RC}",
+            "TID", tid, "RC", rc);
+        co_return rc;
+    }
+
+    uint8_t completionCode = 0;
+    if (responseMsg == nullptr || !responseLen)
+    {
+        lg2::error("No response data for GetFRURecordTable for terminus {TID}",
+                   "TID", tid);
+        co_return rc;
+    }
+
+    uint32_t nextDataTransferHandle = 0;
+    uint8_t transferFlag = 0;
+    size_t fruRecordTableLength = 0;
+    std::vector<uint8_t> fruRecordTableData(responseLen - sizeof(pldm_msg_hdr));
+
+    auto responsePtr = reinterpret_cast<const struct pldm_msg*>(responseMsg);
+    rc = decode_get_fru_record_table_resp(
+        responsePtr, responseLen - sizeof(pldm_msg_hdr), &completionCode,
+        &nextDataTransferHandle, &transferFlag, fruRecordTableData.data(),
+        &fruRecordTableLength);
+
+    if (rc)
+    {
+        lg2::error(
+            "Failed to decode response GetFRURecordTable for terminus ID {TID}, error {RC} ",
+            "TID", tid, "RC", rc);
+        co_return rc;
+    }
+
+    if (completionCode != PLDM_SUCCESS)
+    {
+        lg2::error(
+            "Error : GetFRURecordTable for terminus ID {TID}, complete code {CC}.",
+            "TID", tid, "CC", completionCode);
+        co_return rc;
+    }
+
+    parseFruRecordTable(tid, fruRecordTableData.data(), fruRecordTableLength);
+
+    co_return rc;
+}
+
 } // namespace platform_mc
 } // namespace pldm
