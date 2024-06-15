@@ -82,6 +82,7 @@ if get_option('ampere').enabled()
   add_project_arguments('-DAMPERE', language : 'cpp')
 endif
 conf_data.set_quoted('AMPERE_PLDM_EVENT_HANDLER', get_option('ampere-pldm-event-handler-app'))
+conf_data.set_quoted('EID_TO_MCTP_MEDIUM', join_paths(package_datadir, 'eid_to_name.json'))
 
 if get_option('ampere').enabled()
   add_project_arguments('-DAMPERE', language : 'c')

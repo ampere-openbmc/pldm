@@ -11,6 +11,9 @@
 #include "sensor_manager.hpp"
 #include "terminus_manager.hpp"
 
+#include <filesystem>
+#include <string>
+
 namespace pldm
 {
 namespace platform_mc
@@ -41,7 +44,9 @@ class Manager : public pldm::MctpDiscoveryHandlerIntf
         platformManager(terminusManager, termini),
         sensorManager(event, terminusManager, termini, this),
         eventManager(terminusManager, termini)
-    {}
+    {
+        loadEidToMCTPMediumConfigs();
+    }
 
     /** @brief Helper function to do the actions before discovering terminus
      *
@@ -226,6 +231,11 @@ class Manager : public pldm::MctpDiscoveryHandlerIntf
     exec::task<int> oemPollForPlatformEvent(pldm_tid_t tid);
 
   private:
+    /** @brief Loading the static Eid to MCTP Medium string.
+     *
+     */
+    void loadEidToMCTPMediumConfigs();
+
     /** @brief List of discovered termini */
     TerminiMapper termini{};
 
@@ -245,6 +255,11 @@ class Manager : public pldm::MctpDiscoveryHandlerIntf
 
     /** @brief Store event manager handler */
     EventManager eventManager;
+
+    /*
+     * Mapping from MCTP EID to MCTP Medium
+     */
+    std::map<pldm_tid_t, std::string> eidToMctpMediums;
 };
 } // namespace platform_mc
 } // namespace pldm

@@ -2,6 +2,8 @@
 
 #include "terminus_manager.hpp"
 
+#include <linux/mctp.h>
+
 #include <phosphor-logging/lg2.hpp>
 
 #include <ranges>
@@ -203,6 +205,49 @@ exec::task<int> PlatformManager::configEventReceiver(pldm_tid_t tid)
             lg2::error(
                 "Failed to set event receiver for terminus with TID: {TID}, error: {ERROR}",
                 "TID", tid, "ERROR", rc);
+        }
+    }
+
+    co_return PLDM_SUCCESS;
+}
+
+exec::task<int> PlatformManager::setTerminiNames(
+    std::map<pldm_tid_t, std::string> terminiNames)
+{
+    for (auto& [tid, terminus] : termini)
+    {
+        if (!terminus)
+        {
+            continue;
+        }
+        try
+        {
+            std::string name = "";
+            auto eid = MCTP_ADDR_NULL;
+            auto terminusMctpInfo = terminusManager.toMctpInfos(tid);
+            if (terminusMctpInfo)
+            {
+                auto& mctpInfos = *terminusMctpInfo;
+                for (auto& mctpInfo : mctpInfos)
+                {
+                    if (terminiNames.contains(std::get<0>(mctpInfo)))
+                    {
+                        eid = std::get<0>(mctpInfo);
+                        break;
+                    }
+                }
+            }
+
+            if (pldm::utils::isValidEID(eid) && terminiNames.contains(eid))
+            {
+                name = terminiNames[eid];
+            }
+            terminus->setTerminusName(name);
+        }
+        catch (const std::exception& e)
+        {
+            lg2::error("Failed to set Terminus Name TID: {TID}, error: {ERROR}",
+                       "TID", tid, "ERROR", e);
         }
     }
 
