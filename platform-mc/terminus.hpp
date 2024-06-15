@@ -140,6 +140,12 @@ class Terminus
         return tid;
     }
 
+    /** @brief The setter to set terminus's mctp medium */
+    void setTerminusName(std::string name)
+    {
+        terminusName = name;
+    }
+
     /** @brief The getter to get terminus's mctp medium */
     std::optional<std::string_view> getTerminusName()
     {
