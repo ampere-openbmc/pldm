@@ -194,6 +194,49 @@ exec::task<int> PlatformManager::initTerminus()
     co_return PLDM_SUCCESS;
 }
 
+exec::task<int> PlatformManager::setTerminiNames(
+    std::map<pldm_tid_t, std::string> terminiNames)
+{
+    for (auto& [tid, terminus] : termini)
+    {
+        if (!terminus)
+        {
+            continue;
+        }
+        try
+        {
+            std::string name = "";
+            auto eid = MCTP_NULL_EID;
+            auto terminusMctpInfo = terminusManager.toMctpInfos(tid);
+            if (terminusMctpInfo)
+            {
+                auto& mctpInfos = *terminusMctpInfo;
+                for (auto& mctpInfo : mctpInfos)
+                {
+                    if (terminiNames.contains(std::get<0>(mctpInfo)))
+                    {
+                        eid = std::get<0>(mctpInfo);
+                        break;
+                    }
+                }
+            }
+
+            if (eid != MCTP_NULL_EID && terminiNames.contains(eid))
+            {
+                name = terminiNames[eid];
+            }
+            terminus->setTerminusName(name);
+        }
+        catch (const std::exception& e)
+        {
+            lg2::error("Failed to set Terminus Name TID: {TID}, error: {ERROR}",
+                       "TID", tid, "ERROR", e);
+        }
+    }
+
+    co_return PLDM_SUCCESS;
+}
+
 exec::task<int> PlatformManager::getPDRs(std::shared_ptr<Terminus> terminus)
 {
     pldm_tid_t tid = terminus->getTid();
