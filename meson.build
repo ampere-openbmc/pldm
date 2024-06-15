@@ -138,6 +138,7 @@ conf_data.set(
 )
 conf_data.set('SENSOR_POLLING_TIME', get_option('sensor-polling-time'))
 conf_data.set('SENSOR_CREATION_INTERVAL', get_option('sensor-creation-interval'))
+conf_data.set_quoted('EID_TO_MCTP_MEDIUM', join_paths(package_datadir, 'eid_to_name.json'))
 
 configure_file(output: 'config.h', configuration: conf_data)
 
