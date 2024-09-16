@@ -831,11 +831,11 @@ void NumericSensor::updateThresholds()
     }
     if (!useMetricInterface)
     {
-        valueIntf->value();
+        value = valueIntf->value();
     }
     else
     {
-        metricIntf->value();
+        value = metricIntf->value();
     }
     if (thresholdWarningIntf &&
         !std::isnan(thresholdWarningIntf->warningHigh()))
