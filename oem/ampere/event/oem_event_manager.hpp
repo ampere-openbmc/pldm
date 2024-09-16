@@ -45,7 +45,7 @@ class OemEventManager
                                const uint8_t* eventData, size_t eventDataSize);
 
   protected:
-    void pausePolling();
+    void pausePolling(pldm_tid_t tid);
 
     sdeventplus::Event& event;
     /** @brief sensor polling interval in ms. */

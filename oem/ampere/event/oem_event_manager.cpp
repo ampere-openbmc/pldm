@@ -45,12 +45,9 @@ exec::task<int> OemEventManager::oemPollForPlatformEvent(pldm_tid_t tid)
     co_return PLDM_SUCCESS;
 }
 
-void OemEventManager::pausePolling()
+void OemEventManager::pausePolling(pldm_tid_t tid)
 {
-    for (auto it = timeStamp.begin(); it != timeStamp.end(); ++it)
-    {
-        manager->updateAvailableState(it->first, false);
-    }
+    manager->updateAvailableState(tid, false);
 }
 
 int OemEventManager::processOemMsgPollEvent(
@@ -83,7 +80,7 @@ int OemEventManager::processOemMsgPollEvent(
     if (ampHdr.typeId.member.isBert)
     {
         info("BERT is triggered. Pause polling sensors/event.");
-        pausePolling();
+        pausePolling(tid);
         if (system("systemctl stop ampere-sysfw-hang-handler.service"))
         {
             error("Failed to call stop hand-detection service");
