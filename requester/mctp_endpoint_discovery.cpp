@@ -200,7 +200,6 @@ void MctpDiscovery::getAddedMctpInfos(sdbusplus::message_t& msg,
     {
         error("Error getting Endpoint UUID D-Bus interface, error - {ERROR}",
               "ERROR", e);
-        return;
     }
     const Availability& availability = getEndpointConnectivityProp(objPath.str);
 
