@@ -38,6 +38,12 @@ namespace training_failure = dimm::training_failure;
 
 constexpr const char* BIOSFWPanicRegistry =
     "OpenBMC.0.1.BIOSFirmwarePanicReason.Warning";
+constexpr const char* ampereEventRegistry = "OpenBMC.0.1.AmpereEvent.OK";
+constexpr const char* ampereWarningRegistry =
+    "OpenBMC.0.1.AmpereWarning.Warning";
+constexpr const char* ampereCriticalRegistry =
+    "OpenBMC.0.1.AmpereCritical.Critical";
+
 constexpr auto maxDIMMIdxBitNum = 24;
 constexpr auto maxDIMMInstantNum = 24;
 
@@ -177,6 +183,9 @@ std::unordered_map<uint8_t, std::pair<std::string, EventToMsgMap_t>>
     Using pldm::oem::log_level
 */
 std::unordered_map<log_level, std::string> logLevelToRedfishMsgIdMap = {
+    {log_level::OK, ampereEventRegistry},
+    {log_level::WARNING, ampereWarningRegistry},
+    {log_level::CRITICAL, ampereCriticalRegistry},
     {log_level::BIOSFWPANIC, BIOSFWPanicRegistry}};
 
 exec::task<int> OemEventManager::oemPollForPlatformEvent(pldm_tid_t tid)
