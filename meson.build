@@ -238,8 +238,8 @@ endif
 oem_files = []
 if get_option('ampere').enabled()
   oem_files += [
-  'oem/ampere/event/oem_event_manager.cpp',
   'oem/ampere/event/cper.cpp',
+  'oem/ampere/event/oem_event_manager.cpp',
   'oem/ampere/event/utils.cpp',
 ]
 endif

@@ -278,6 +278,12 @@ int main(int argc, char** argv)
     std::unique_ptr<platform_mc::Manager> platformManager =
         std::make_unique<platform_mc::Manager>(event, reqHandler, instanceIdDb);
 
+#ifdef AMPERE
+    std::unique_ptr<oem::OemEventManager> oemEventManager =
+        std::make_unique<oem::OemEventManager>(event, reqHandler, instanceIdDb,
+                                               platformManager.get());
+#endif
+
     pldm::responder::platform::EventMap addOnEventHandlers{
         {PLDM_CPER_EVENT,
          {[&platformManager](const pldm_msg* request, size_t payloadLength,
@@ -294,36 +300,47 @@ int main(int argc, char** argv)
                  request, payloadLength, formatVersion, tid, eventDataOffset);
          }}},
         {PLDM_SENSOR_EVENT,
+#ifndef AMPERE
          {[&platformManager](const pldm_msg* request, size_t payloadLength,
                              uint8_t formatVersion, uint8_t tid,
                              size_t eventDataOffset) {
              return platformManager->handleSensorEvent(
                  request, payloadLength, formatVersion, tid, eventDataOffset);
-         }}}};
+         }}
+#else
+         {[&platformManager](const pldm_msg* request, size_t payloadLength,
+                             uint8_t formatVersion, uint8_t tid,
+                             size_t eventDataOffset) {
+              return platformManager->handleSensorEvent(
+                  request, payloadLength, formatVersion, tid, eventDataOffset);
+          },
+          [&oemEventManager](const pldm_msg* request, size_t payloadLength,
+                             uint8_t formatVersion, uint8_t tid,
+                             size_t eventDataOffset) {
+              return oemEventManager->handleSensorEvent(
+                  request, payloadLength, formatVersion, tid, eventDataOffset);
+          }}
+#endif
+        }};
 
 #ifdef AMPERE
-    // TBD: Move to another repository like ampere-ipmi-oem
-    // Expose API startEventPolling and registerOEMHandler
-    std::unique_ptr<oem::OemEventManager> OemEvent =
-        std::make_unique<oem::OemEventManager>(event, reqHandler, instanceIdDb,
-                                               platformManager.get());
 
-    platformManager->registerOEMPollMethod([&OemEvent](pldm_tid_t tid) {
-        return OemEvent->oemPollForPlatformEvent(tid);
+    platformManager->registerOEMPollMethod([&oemEventManager](pldm_tid_t tid) {
+        return oemEventManager->oemPollForPlatformEvent(tid);
     });
 
     platformManager->registerPolledEventOEMHandler(
         PLDM_OEM_EVENT_CLASS_0xFA,
-        [&OemEvent](pldm_tid_t tid, uint16_t eventId, const uint8_t* eventData,
+        [&oemEventManager](pldm_tid_t tid, uint16_t eventId, const uint8_t* eventData,
                     size_t eventDataSize) {
-            return OemEvent->processOemMsgPollEvent(tid, eventId, eventData,
+            return oemEventManager->processOemMsgPollEvent(tid, eventId, eventData,
                                                     eventDataSize);
         });
     platformManager->registerPolledEventOEMHandler(
         PLDM_CPER_EVENT,
-        [&OemEvent](pldm_tid_t tid, uint16_t eventId, const uint8_t* eventData,
+        [&oemEventManager](pldm_tid_t tid, uint16_t eventId, const uint8_t* eventData,
                     size_t eventDataSize) {
-            return OemEvent->processOemMsgPollEvent(tid, eventId, eventData,
+            return oemEventManager->processOemMsgPollEvent(tid, eventId, eventData,
                                                     eventDataSize);
         });
 
