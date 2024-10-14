@@ -207,17 +207,6 @@ void decodeCperRecord(const uint8_t* data, long pos, AmpereSpecData* ampSpecHdr,
 
     std::memcpy(&cperHeader, &data[pos], sizeof(CPERRecodHeader));
     pos += sizeof(CPERRecodHeader);
-
-    // Revert 4 bytes of SignatureStart
-    char* sigStr = (char*)&cperHeader.SignatureStart;
-    char tmp;
-    tmp = sigStr[0];
-    sigStr[0] = sigStr[3];
-    sigStr[3] = tmp;
-    tmp = sigStr[1];
-    sigStr[1] = sigStr[2];
-    sigStr[2] = tmp;
-
     out.write((char*)&cperHeader, sizeof(CPERRecodHeader));
 
     CPERSectionDescriptor* secDesc =
