@@ -469,40 +469,70 @@ int EventManager::createCperDumpEntry(const std::string& dataType,
     return PLDM_SUCCESS;
 }
 
+int EventManager::getNextPartParameters(
+    uint16_t eventId, std::vector<uint8_t> eventMessage,
+    uint8_t transferFlag,
+    uint32_t eventDataIntegrityChecksum, uint32_t nextDataTransferHandle,
+    uint8_t* transferOperationFlag, uint32_t* dataTransferHandle,
+    uint32_t* eventIdToAcknowledge)
+{
+    if (transferFlag != PLDM_PLATFORM_TRANSFER_START_AND_END &&
+        transferFlag != PLDM_PLATFORM_TRANSFER_END)
+    {
+        *transferOperationFlag = PLDM_GET_NEXTPART;
+        *dataTransferHandle = nextDataTransferHandle;
+        *eventIdToAcknowledge = PLDM_PLATFORM_EVENT_ID_FRAGMENT;
+        return PLDM_SUCCESS;
+    }
+
+    if (transferFlag == PLDM_PLATFORM_TRANSFER_END)
+    {
+        if (eventDataIntegrityChecksum !=
+            crc32(eventMessage.data(), eventMessage.size()))
+        {
+            lg2::error("pollForPlatformEventMessage invalid checksum.");
+            return PLDM_ERROR_INVALID_DATA;
+        }
+    }
+
+    /* End of one event. Set request transfer flag to ACK */
+    *transferOperationFlag = PLDM_ACKNOWLEDGEMENT_ONLY;
+    *dataTransferHandle = 0;
+    *eventIdToAcknowledge = eventId;
+
+    return PLDM_SUCCESS;
+}
+
 exec::task<int> EventManager::pollForPlatformEventTask(
     pldm_tid_t tid, uint16_t /* pollEventId */, uint32_t pollDataTransferHandle)
 {
     uint8_t rc = 0;
+    // Set once, doesn't need resetting
     uint8_t transferOperationFlag = PLDM_GET_FIRSTPART;
     uint32_t dataTransferHandle = pollDataTransferHandle;
     uint32_t eventIdToAcknowledge = PLDM_PLATFORM_EVENT_ID_NULL;
-
-    uint8_t completionCode;
-    uint8_t eventTid;
-    uint16_t eventId = 0xffff;
-    uint8_t formatVersion = 0x1;
-    uint32_t nextDataTransferHandle;
-    uint8_t transferFlag;
-    uint8_t eventClass;
-    uint32_t eventDataSize;
-    uint8_t* eventData;
-    uint32_t eventDataIntegrityChecksum;
+    uint8_t formatVersion = 0x1; // Constant, no need to reset
+    uint16_t eventId = PLDM_PLATFORM_EVENT_ID_ACK;
+    uint16_t polledEventId = PLDM_PLATFORM_EVENT_ID_NONE;
+    pldm_tid_t polledEventTid = 0;
+    uint8_t polledEventClass = 0;
 
     std::vector<uint8_t> eventMessage{};
-    /* reset force stop */
+
+    // Reset and mark terminus as available
     updateAvailableState(tid, true);
 
     while (eventId != PLDM_PLATFORM_EVENT_ID_NONE)
     {
-        completionCode = 0;
-        eventTid = 0;
+        uint8_t completionCode = 0;
+        pldm_tid_t eventTid = PLDM_PLATFORM_EVENT_ID_NONE;
         eventId = PLDM_PLATFORM_EVENT_ID_NONE;
-        nextDataTransferHandle = 0;
-        transferFlag = 0;
-        eventClass = 0;
-        eventDataSize = 0;
-        eventData = nullptr;
-        eventDataIntegrityChecksum = 0;
+        uint32_t nextDataTransferHandle = 0;
+        uint8_t transferFlag = 0;
+        uint8_t eventClass = 0;
+        uint32_t eventDataSize = 0;
+        uint8_t* eventData = nullptr;
+        uint32_t eventDataIntegrityChecksum = 0;
 
         /* Stop event polling */
         if (!getAvailableState(tid))
@@ -534,58 +564,45 @@ exec::task<int> EventManager::pollForPlatformEventTask(
 
         if (transferOperationFlag == PLDM_ACKNOWLEDGEMENT_ONLY)
         {
+            /* Handle the polled event after finish ACK one event */
+            if (eventHandlers.contains(polledEventClass))
+            {
+                eventHandlers.at(polledEventClass)(polledEventTid,
+                                                   polledEventId,
+                                                   eventMessage.data(),
+                                                   eventMessage.size());
+            }
+            eventMessage.clear();
+
             if (eventId == PLDM_PLATFORM_EVENT_ID_ACK)
             {
                 transferOperationFlag = PLDM_GET_FIRSTPART;
                 dataTransferHandle = 0;
                 eventIdToAcknowledge = PLDM_PLATFORM_EVENT_ID_NULL;
-                eventMessage.clear();
             }
         }
         else
         {
-            if (transferFlag != PLDM_PLATFORM_TRANSFER_START_AND_END &&
-                transferFlag != PLDM_PLATFORM_TRANSFER_END)
+            auto ret = getNextPartParameters(
+                eventId, eventMessage, transferFlag,
+                eventDataIntegrityChecksum, nextDataTransferHandle,
+                &transferOperationFlag, &dataTransferHandle,
+                &eventIdToAcknowledge);
+            if (ret)
             {
-                transferOperationFlag = PLDM_GET_NEXTPART;
-                dataTransferHandle = nextDataTransferHandle;
-                eventIdToAcknowledge = PLDM_PLATFORM_EVENT_ID_FRAGMENT;
+                lg2::error(
+                    "Failed to process data of pollForPlatformEventMessage for terminus {TID}, event {EVENTID} return {RET}",
+                    "TID", tid, "EVENTID", eventId, "RET", ret);
+                co_return PLDM_ERROR_INVALID_DATA;
             }
-            else
-            {
-                if (transferFlag == PLDM_PLATFORM_TRANSFER_START_AND_END)
-                {
-                    if (eventHandlers.contains(eventClass))
-                    {
-                        eventHandlers.at(
-                            eventClass)(eventTid, eventId, eventMessage.data(),
-                                        eventMessage.size());
-                    }
-                }
-                else if (transferFlag == PLDM_PLATFORM_TRANSFER_END)
-                {
-                    if (eventDataIntegrityChecksum ==
-                        crc32(eventMessage.data(), eventMessage.size()))
-                    {
-                        if (eventHandlers.contains(eventClass))
-                        {
-                            eventHandlers.at(eventClass)(eventTid, eventId,
-                                                         eventMessage.data(),
-                                                         eventMessage.size());
-                        }
-                    }
-                    else
-                    {
-                        lg2::error(
-                            "pollForPlatformEventMessage for terminus {TID} with event {EVENTID} checksum error.",
-                            "TID", tid, "EVENTID", eventId);
-                        co_return PLDM_ERROR_INVALID_DATA;
-                    }
-                }
 
-                transferOperationFlag = PLDM_ACKNOWLEDGEMENT_ONLY;
-                dataTransferHandle = 0;
-                eventIdToAcknowledge = eventId;
+            /* Store the polled event INFO to handle after ACK */
+            if ((transferFlag == PLDM_PLATFORM_TRANSFER_START_AND_END) ||
+                (transferFlag == PLDM_PLATFORM_TRANSFER_END))
+            {
+                polledEventTid = eventTid;
+                polledEventId = eventId;
+                polledEventClass = eventClass;
             }
         }
     }

@@ -191,6 +191,27 @@ class EventManager
         uint8_t& eventClass, uint32_t& eventDataSize, uint8_t*& eventData,
         uint32_t& eventDataIntegrityChecksum);
 
+    /** @brief Get the parameters for next pollForPlatformEventMessage to get
+     *         the remaining part of event if has
+     *
+     *  @param[in] eventId - Event ID
+     *  @param[in] eventMessage - event data of response message
+     *  @param[in] transferFlag - transfer Flag of response data
+     *  @param[in] eventDataIntegrityChecksum - check sum of final event
+     *  @param[in] nextDataTransferHandle - Next handle to get next data part
+     *  @param[out] transferOperationFlag - transfer Flag of next request data
+     *  @param[out] dataTransferHandle - Data transfer handle
+     *  @param[out] eventIdToAcknowledge - Event ID
+     *
+     *  @return return_value - PLDM completion code
+     */
+    int getNextPartParameters(
+        uint16_t eventId,
+        std::vector<uint8_t> eventMessage, uint8_t transferFlag,
+        uint32_t eventDataIntegrityChecksum,
+        uint32_t nextDataTransferHandle, uint8_t* transferOperationFlag,
+        uint32_t* dataTransferHandle, uint32_t* eventIdToAcknowledge);
+
     /** @brief Reference of terminusManager */
     TerminusManager& terminusManager;
 
