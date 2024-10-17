@@ -583,12 +583,22 @@ int OemEventManager::processStateSensorEvent(pldm_tid_t tid, uint16_t sensorId,
             if (stateMap.find(eventState) != stateMap.end())
             {
                 logLevel = std::get<0>(stateMap[eventState]);
-                description += " state is: " +  std::get<1>(stateMap[eventState]);
+                description += " state : " +  std::get<1>(stateMap[eventState]);
+                if (stateMap.find(previousEventState) != stateMap.end())
+                {
+                    description += "; previous state: " +
+                                    std::get<1>(stateMap[previousEventState]);
+                }
             }
             else
             {
-                description += " sends unsupported event state "
+                description += " sends unsupported event state: "
                             + std::to_string(eventState);
+                if (stateMap.find(previousEventState) != stateMap.end())
+                {
+                    description += "; previous state: " +
+                                    std::get<1>(stateMap[previousEventState]);
+                }
             }
         }
         else
