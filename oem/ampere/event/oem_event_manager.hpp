@@ -93,14 +93,14 @@ typedef union
     uint32_t value;
     struct
     {
-        uint8_t segment:5;
-        uint8_t bus:8;
-        uint8_t device:5;
-        uint8_t function:4;
-        uint8_t action:1;
-        uint8_t opStatus:1;
-        uint8_t mediaSlot:7;
-        uint8_t reserved:1;
+        uint32_t segment:5;
+        uint32_t bus:8;
+        uint32_t device:5;
+        uint32_t function:4;
+        uint32_t action:1;
+        uint32_t opStatus:1;
+        uint32_t mediaSlot:7;
+        uint32_t reserved:1;
     } __attribute__((packed)) bits;
 } PCIeHotPlugEventRecord_t;
 
@@ -109,16 +109,16 @@ typedef union
     uint32_t value;
     struct
     {
-        uint8_t type:2;
-        uint8_t mcuRankIdx:3;
-        uint8_t reserved_1:3; // byte0
-        uint8_t sliceNum:4;
-        uint8_t upperNibbStatErr:1;
-        uint8_t lowerNibbStatErr:1;
-        uint8_t reserved_2:2; // byte1
-        uint8_t syndrome:4;
-        uint8_t reserved_3:4; // byte2
-        uint8_t reserved_byte;
+        uint32_t type:2;
+        uint32_t mcuRankIdx:3;
+        uint32_t reserved_1:3; // byte0
+        uint32_t sliceNum:4;
+        uint32_t upperNibbStatErr:1;
+        uint32_t lowerNibbStatErr:1;
+        uint32_t reserved_2:2; // byte1
+        uint32_t syndrome:4;
+        uint32_t reserved_3:4; // byte2
+        uint32_t reserved_byte;
     } __attribute__((packed)) bits;
 } DIMMTrainingFailure_t;
 
@@ -210,12 +210,12 @@ typedef union
     uint32_t value;
     struct
     {
-        uint8_t vr_status_byte_low;
-        uint8_t vr_status_byte_high;
-        uint16_t reserved_1:12;
-        uint8_t warning:1;
-        uint8_t critical:1;
-        uint8_t reserved_2:2;
+        uint32_t vr_status_byte_low;
+        uint32_t vr_status_byte_high;
+        uint32_t reserved_1:12;
+        uint32_t warning:1;
+        uint32_t critical:1;
+        uint32_t reserved_2:2;
     } __attribute__((packed)) bits;
 } VRDStatus_t;
 
