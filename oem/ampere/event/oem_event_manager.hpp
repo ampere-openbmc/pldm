@@ -258,7 +258,7 @@ class OemEventManager
      *  @return int - returned error code
      */
     int handleSensorEvent(const pldm_msg* request, size_t payloadLength,
-                          uint8_t /* formatVersion */, uint8_t tid,
+                          uint8_t /* formatVersion */, pldm_tid_t tid,
                           size_t eventDataOffset);
 
   protected:
@@ -272,7 +272,7 @@ class OemEventManager
      *
      *  @return std::string - the prefeix string
      */
-    std::string prefixMsgStrCreation(uint8_t tid, uint16_t sensorId);
+    std::string prefixMsgStrCreation(pldm_tid_t tid, uint16_t sensorId);
 
     /** @brief Log the message into Redfish SEL.
      *
@@ -305,7 +305,7 @@ class OemEventManager
      *  @param[in] sensorId - Sensor ID
      *  @param[in] presentReading - the present reading of the sensor
      */
-    void handlePCIeHotPlugEvent(uint8_t tid, uint16_t /*sensorId*/,
+    void handlePCIeHotPlugEvent(pldm_tid_t tid, uint16_t /*sensorId*/,
                                 uint32_t presentReading);
 
     /** @brief Handle numeric sensor event message from boot overall sensor.
@@ -325,7 +325,7 @@ class OemEventManager
      *  @param[in] presentReading - the present reading of the sensor
      *  @param[in] isDIMM - true if the sensor is DIMM status sensor
      */
-    void handleDDRStatusEvent(uint8_t tid, uint16_t sensorId,
+    void handleDDRStatusEvent(pldm_tid_t tid, uint16_t sensorId,
                               uint32_t presentReading, bool isDIMM);
 
     /** @brief Handle numeric sensor event message from VRD status sensor.
@@ -334,7 +334,7 @@ class OemEventManager
      *  @param[in] sensorId - Sensor ID
      *  @param[in] presentReading - the present reading of the sensor
      */
-    void handleVRDStatusEvent(uint8_t tid, uint16_t sensorId,
+    void handleVRDStatusEvent(pldm_tid_t tid, uint16_t sensorId,
                               uint32_t presentReading);
 
     /** @brief Handle numeric sensor event messages.

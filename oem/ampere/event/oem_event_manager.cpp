@@ -332,10 +332,10 @@ int OemEventManager::processOemMsgPollEvent(
 }
 
 std::string
-    OemEventManager::prefixMsgStrCreation(uint8_t tid, uint16_t sensorId)
+    OemEventManager::prefixMsgStrCreation(pldm_tid_t tid, uint16_t sensorId)
 {
     std::string description;
-    if (tidToSocketNameMap.find(tid) == tidToSocketNameMap.end())
+    if (!tidToSocketNameMap.contains(tid))
     {
         description += "TID " + std::to_string(tid) + ": ";
     }
@@ -344,7 +344,7 @@ std::string
         description += tidToSocketNameMap[tid] + ": ";
     }
 
-    if (sensorIdToStrMap.find(sensorId) == sensorIdToStrMap.end())
+    if (!sensorIdToStrMap.contains(sensorId))
     {
         description += "Sensor ID " + std::to_string(sensorId) + ": ";
     }
@@ -361,8 +361,7 @@ void OemEventManager::sendJournalRedfish(const std::string& description,
 {
     if (!description.empty())
     {
-        if (logLevelToRedfishMsgIdMap.find(logLevel) ==
-            logLevelToRedfishMsgIdMap.end())
+        if (!logLevelToRedfishMsgIdMap.contains(logLevel))
         {
             lg2::error("Description {DES}", "DES", description);
             return;
@@ -402,7 +401,7 @@ void OemEventManager::handleBootOverallEvent(
      * Handle SECpro, Mpro, ATF BL1, ATF BL2, ATF BL31,
      * ATF BL32 and DDR initialization
      */
-    if (bootStageToMsgMap.find(byte3) != bootStageToMsgMap.end())
+    if (bootStageToMsgMap.contains(byte3))
     {
         // Boot stage adding
         description += bootStageToMsgMap[byte3];
@@ -572,7 +571,7 @@ int OemEventManager::processStateSensorEvent(pldm_tid_t tid, uint16_t sensorId,
     std::string description;
     log_level logLevel = log_level::OK;
 
-    if (stateSensorToMsgMap.find(sensorId) != stateSensorToMsgMap.end())
+    if (stateSensorToMsgMap.contains(sensorId))
     {
         description += prefixMsgStrCreation(tid, sensorId);
         auto componentMap = stateSensorToMsgMap[sensorId];
@@ -580,11 +579,11 @@ int OemEventManager::processStateSensorEvent(pldm_tid_t tid, uint16_t sensorId,
         {
             description += std::get<0>(componentMap[sensorOffset]);
             auto stateMap = std::get<1>(componentMap[sensorOffset]);
-            if (stateMap.find(eventState) != stateMap.end())
+            if (stateMap.contains(eventState))
             {
                 logLevel = std::get<0>(stateMap[eventState]);
                 description += " state : " +  std::get<1>(stateMap[eventState]);
-                if (stateMap.find(previousEventState) != stateMap.end())
+                if (stateMap.contains(previousEventState))
                 {
                     description += "; previous state: " +
                                     std::get<1>(stateMap[previousEventState]);
@@ -594,7 +593,7 @@ int OemEventManager::processStateSensorEvent(pldm_tid_t tid, uint16_t sensorId,
             {
                 description += " sends unsupported event state: "
                             + std::to_string(eventState);
-                if (stateMap.find(previousEventState) != stateMap.end())
+                if (stateMap.contains(previousEventState))
                 {
                     description += "; previous state: " +
                                     std::get<1>(stateMap[previousEventState]);
@@ -662,10 +661,10 @@ int OemEventManager::processSensorOpStateEvent(
 
 int OemEventManager::handleSensorEvent(
     const pldm_msg* request, size_t payloadLength, uint8_t /* formatVersion */,
-    uint8_t tid, size_t eventDataOffset)
+    pldm_tid_t tid, size_t eventDataOffset)
 {
     /* This OEM event handler is only used for SoC terminus*/
-    if (tidToSocketNameMap.find(tid) == tidToSocketNameMap.end())
+    if (!tidToSocketNameMap.contains(tid))
     {
         return PLDM_SUCCESS;
     }
@@ -734,7 +733,7 @@ int OemEventManager::handleSensorEvent(
     return PLDM_ERROR;
 }
 
-void OemEventManager::handlePCIeHotPlugEvent(uint8_t tid, uint16_t /*sensorId*/,
+void OemEventManager::handlePCIeHotPlugEvent(pldm_tid_t tid, uint16_t /*sensorId*/,
                                              uint32_t presentReading)
 {
     std::string description;
@@ -746,7 +745,7 @@ void OemEventManager::handlePCIeHotPlugEvent(uint8_t tid, uint16_t /*sensorId*/,
     log_level logLevel =
         (!record.bits.opStatus) ? log_level::OK : log_level::WARNING;
 
-    if (tidToSocketNameMap.find(tid) != tidToSocketNameMap.end())
+    if (tidToSocketNameMap.contains(tid))
     {
         description += tidToSocketNameMap[tid];
     }
@@ -777,8 +776,7 @@ std::string OemEventManager::dimmTrainingFailureToMsg(uint32_t failureInfo)
     std::string description;
     DIMMTrainingFailure_t failure{failureInfo};
 
-    if (dimmTrainingFailureTypeMap.find(failure.bits.type) !=
-        dimmTrainingFailureTypeMap.end())
+    if (dimmTrainingFailureTypeMap.contains(failure.bits.type))
     {
         auto failureInfoMap = dimmTrainingFailureTypeMap[failure.bits.type];
 
@@ -803,7 +801,7 @@ std::string OemEventManager::dimmTrainingFailureToMsg(uint32_t failureInfo)
         description += "; Failure syndrome 0: ";
 
         auto& syndromeMap = std::get<1>(failureInfoMap);
-        if (syndromeMap.find(failure.bits.syndrome) != syndromeMap.end())
+        if (syndromeMap.contains(failure.bits.syndrome))
         {
             description += syndromeMap[failure.bits.syndrome];
         }
@@ -821,7 +819,7 @@ std::string OemEventManager::dimmTrainingFailureToMsg(uint32_t failureInfo)
     return description;
 }
 
-void OemEventManager::handleDDRStatusEvent(uint8_t tid, uint16_t sensorId,
+void OemEventManager::handleDDRStatusEvent(pldm_tid_t tid, uint16_t sensorId,
                                            uint32_t presentReading, bool isDIMM)
 {
     log_level logLevel{log_level::WARNING};
@@ -838,7 +836,7 @@ void OemEventManager::handleDDRStatusEvent(uint8_t tid, uint16_t sensorId,
 
         description += "DIMM " + std::to_string(dimmIdx) + " ";
 
-        if (dimmStatusToMsgMap.find(byte3) != dimmStatusToMsgMap.end())
+        if (dimmStatusToMsgMap.contains(byte3))
         {
             if (byte3 == dimm_status::INSTALLED_NO_ERROR ||
                 byte3 == dimm_status::INSTALLED_BUT_DISABLED)
@@ -903,7 +901,7 @@ void OemEventManager::handleDDRStatusEvent(uint8_t tid, uint16_t sensorId,
     else
     {
         description += "DDR ";
-        if (ddrStatusToMsgMap.find(byte3) != ddrStatusToMsgMap.end())
+        if (ddrStatusToMsgMap.contains(byte3))
         {
             if (byte3 == ddr_status::NO_SYSTEM_LEVEL_ERROR)
             {
@@ -929,7 +927,7 @@ void OemEventManager::handleDDRStatusEvent(uint8_t tid, uint16_t sensorId,
     sendJournalRedfish(description, logLevel);
 }
 
-void OemEventManager::handleVRDStatusEvent(uint8_t tid, uint16_t sensorId,
+void OemEventManager::handleVRDStatusEvent(pldm_tid_t tid, uint16_t sensorId,
                                            uint32_t presentReading)
 {
     log_level logLevel{log_level::WARNING};
