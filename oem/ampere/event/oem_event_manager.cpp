@@ -733,7 +733,7 @@ int OemEventManager::handleSensorEvent(
     return PLDM_ERROR;
 }
 
-void OemEventManager::handlePCIeHotPlugEvent(pldm_tid_t tid, uint16_t /*sensorId*/,
+void OemEventManager::handlePCIeHotPlugEvent(pldm_tid_t tid, uint16_t sensorId,
                                              uint32_t presentReading)
 {
     std::string description;
@@ -745,17 +745,9 @@ void OemEventManager::handlePCIeHotPlugEvent(pldm_tid_t tid, uint16_t /*sensorId
     log_level logLevel =
         (!record.bits.opStatus) ? log_level::OK : log_level::WARNING;
 
-    if (tidToSocketNameMap.contains(tid))
-    {
-        description += tidToSocketNameMap[tid];
-    }
-    else
-    {
-        description += "TID " + std::to_string(tid);
-    }
-    description += ": PCIe Hot Plug Event: ";
+    description += prefixMsgStrCreation(tid, sensorId);
 
-    strStream << " Segment (0x" << std::setfill('0') << std::hex << std::setw(2)
+    strStream << "Segment (0x" << std::setfill('0') << std::hex << std::setw(2)
               << static_cast<uint32_t>(record.bits.segment) << "), Bus (0x"
               << std::setw(2) << static_cast<uint32_t>(record.bits.bus)
               << "), Device (0x" << std::setw(2)

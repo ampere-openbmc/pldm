@@ -305,7 +305,7 @@ class OemEventManager
      *  @param[in] sensorId - Sensor ID
      *  @param[in] presentReading - the present reading of the sensor
      */
-    void handlePCIeHotPlugEvent(pldm_tid_t tid, uint16_t /*sensorId*/,
+    void handlePCIeHotPlugEvent(pldm_tid_t tid, uint16_t sensorId,
                                 uint32_t presentReading);
 
     /** @brief Handle numeric sensor event message from boot overall sensor.
