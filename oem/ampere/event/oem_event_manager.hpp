@@ -118,7 +118,7 @@ typedef union
         uint32_t reserved_2:2; // byte1
         uint32_t syndrome:4;
         uint32_t reserved_3:4; // byte2
-        uint32_t reserved_byte;
+        uint32_t reserved_byte:8;
     } __attribute__((packed)) bits;
 } DIMMTrainingFailure_t;
 
@@ -210,8 +210,8 @@ typedef union
     uint32_t value;
     struct
     {
-        uint32_t vr_status_byte_low;
-        uint32_t vr_status_byte_high;
+        uint32_t vr_status_byte_low:8;
+        uint32_t vr_status_byte_high:8;
         uint32_t reserved_1:12;
         uint32_t warning:1;
         uint32_t critical:1;

@@ -936,6 +936,7 @@ void OemEventManager::handleVRDStatusEvent(pldm_tid_t tid, uint16_t sensorId,
     if (status.bits.warning && status.bits.critical)
     {
         description += "A VR warning and a VR critical";
+        logLevel = log_level::CRITICAL;
     }
     else
     {
@@ -945,7 +946,8 @@ void OemEventManager::handleVRDStatusEvent(pldm_tid_t tid, uint16_t sensorId,
         }
         else if (status.bits.critical)
         {
-            description += "A VR warning";
+            description += "A VR critical";
+            logLevel = log_level::CRITICAL;
         }
         else
         {
@@ -959,7 +961,9 @@ void OemEventManager::handleVRDStatusEvent(pldm_tid_t tid, uint16_t sensorId,
               << std::setw(2)
               << static_cast<uint32_t>(status.bits.vr_status_byte_high)
               << "; VR status byte low is 0x" << std::setw(2)
-              << static_cast<uint32_t>(status.bits.vr_status_byte_low) << ";";
+              << static_cast<uint32_t>(status.bits.vr_status_byte_low)
+              << "; Reading is 0x" << std::setw(2)
+              << static_cast<uint32_t>(presentReading) << ";";
 
     description += strStream.str();
 
