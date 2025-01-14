@@ -1173,6 +1173,7 @@ NumericSensor::NumericSensor(
     valueIntf->maxValue(unitModifier(conversionFormula(maxValue)));
     valueIntf->minValue(unitModifier(conversionFormula(minValue)));
     valueIntf->unit(sensorUnit);
+    valueIntf->value(std::numeric_limits<double>::quiet_NaN());
 
     try
     {
