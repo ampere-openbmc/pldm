@@ -977,5 +977,60 @@ exec::task<int> TerminusManager::getPLDMVersion(pldm_tid_t tid, uint8_t type,
     co_return completionCode;
 }
 
+std::optional<mctp_eid_t> TerminusManager::getActiveEidByName(
+    const std::string terminusName)
+{
+    if (!termini.size() || terminusName.empty())
+    {
+        return std::nullopt;
+    }
+
+    for (auto& [tid, terminus] : termini)
+    {
+        if (!terminus)
+        {
+            continue;
+        }
+
+        auto tmp = terminus->getTerminusName();
+        if (!tmp || tmp.value().empty() || tmp.value() != terminusName)
+        {
+            continue;
+        }
+
+        try
+        {
+            auto mctpInfosOpt = toMctpInfos(tid);
+            if (!mctpInfosOpt)
+            {
+                return std::nullopt;
+            }
+
+            auto mctpInfos = mctpInfosOpt.value();
+
+            auto mctpInfoIt =
+                std::find_if(mctpInfos.rbegin(), mctpInfos.rend(),
+                             [this](const auto& mctpInfo) {
+                                 return (!mctpInfoAvailTable.contains(mctpInfo))
+                                            ? false
+                                            : mctpInfoAvailTable[mctpInfo];
+                             });
+
+            if (mctpInfoIt == mctpInfos.rend())
+            {
+                return std::nullopt;
+            }
+
+            auto eid = std::get<0>(*mctpInfoIt);
+            return eid;
+        }
+        catch (const std::exception& e)
+        {
+            return std::nullopt;
+        }
+    }
+
+    return std::nullopt;
+}
 } // namespace platform_mc
 } // namespace pldm
